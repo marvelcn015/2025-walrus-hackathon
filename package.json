@@ -30,6 +30,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@openapitools/openapi-generator-cli": "^2.25.0",
     "@tailwindcss/postcss": "^4",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
