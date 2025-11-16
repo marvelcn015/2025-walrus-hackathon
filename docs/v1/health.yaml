@@ -1,0 +1,21 @@
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealthCheck
+      summary: Health check endpoint
+      description: Returns the health status of the API
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
