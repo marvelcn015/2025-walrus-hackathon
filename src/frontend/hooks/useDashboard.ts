@@ -5,7 +5,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { DashboardResponse } from '@/src/frontend/lib/api-client';
-import { mockDashboardResponse } from '@/src/frontend/lib/mock-data';
+import { getDashboardByDealId } from '@/src/frontend/lib/mock-data';
 
 // Query keys
 export const dashboardKeys = {
@@ -23,15 +23,9 @@ export function useDashboard(dealId: string) {
       // Simulate API delay
       await new Promise((resolve) => setTimeout(resolve, 400));
 
-      // Return mock dashboard data
+      // Return mock dashboard data based on dealId
       // In real implementation, this would call the API with dealId
-      return {
-        ...mockDashboardResponse,
-        dealInfo: {
-          ...mockDashboardResponse.dealInfo,
-          dealId,
-        },
-      };
+      return getDashboardByDealId(dealId);
     },
     enabled: !!dealId,
   });

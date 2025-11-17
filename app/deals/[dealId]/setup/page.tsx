@@ -6,6 +6,7 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 import { useDashboard } from '@/src/frontend/hooks/useDashboard';
 import { WalletButton } from '@/src/frontend/components/wallet/WalletButton';
 import { PeriodFormSection } from '@/src/frontend/components/setup/PeriodFormSection';
@@ -106,11 +107,11 @@ export default function ParameterSetupPage() {
       // TODO: Call API to set parameters
       // await setParameters(dealId, payload);
 
-      alert('Parameters saved successfully!');
+      toast.success('Parameters saved successfully!');
       router.push(`/deals/${dealId}`);
     } catch (error) {
       console.error('Failed to save parameters:', error);
-      alert('Failed to save parameters. Please try again.');
+      toast.error('Failed to save parameters. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

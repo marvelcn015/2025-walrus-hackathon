@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/src/frontend/components/providers";
 import { Header } from "@/src/frontend/components/layout/Header";
 import { Footer } from "@/src/frontend/components/layout/Footer";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export default function RootLayout({
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />
+          <Toaster />
         </Providers>
       </body>
     </html>

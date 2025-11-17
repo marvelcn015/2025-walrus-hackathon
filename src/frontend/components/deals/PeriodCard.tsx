@@ -87,7 +87,7 @@ export function PeriodCard({ period, dealId, userRole }: PeriodCardProps) {
       return null;
     }
 
-    const action = period.nextAction.action;
+    const action = period.nextAction.action.toLowerCase();
 
     if (action.includes('upload') && userRole === 'seller') {
       return (

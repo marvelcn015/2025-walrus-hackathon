@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -71,7 +72,7 @@ export function CreateDealDialog({ children }: CreateDealDialogProps) {
 
   const onSubmit = async (data: CreateDealFormData) => {
     if (!currentAccount) {
-      alert('Please connect your wallet first');
+      toast.error('Please connect your wallet first');
       return;
     }
 
@@ -90,13 +91,15 @@ export function CreateDealDialog({ children }: CreateDealDialogProps) {
       setOpen(false);
       form.reset();
 
+      toast.success('Deal created successfully!');
+
       // Navigate to the new deal's dashboard
       if (result.deal.dealId) {
         router.push(`/deals/${result.deal.dealId}`);
       }
     } catch (error) {
       console.error('Failed to create deal:', error);
-      alert('Failed to create deal. Please try again.');
+      toast.error('Failed to create deal. Please try again.');
     }
   };
 

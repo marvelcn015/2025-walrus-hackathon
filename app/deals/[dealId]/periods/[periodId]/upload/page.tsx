@@ -6,6 +6,7 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { toast } from 'sonner';
 import { useDashboard } from '@/src/frontend/hooks/useDashboard';
 import { WalletButton } from '@/src/frontend/components/wallet/WalletButton';
 import { FileUploadZone } from '@/src/frontend/components/upload/FileUploadZone';
@@ -110,10 +111,10 @@ export default function DataUploadPage() {
         description: '',
       });
 
-      alert('File uploaded successfully!');
+      toast.success('File uploaded successfully!');
     } catch (error) {
       console.error('Failed to upload file:', error);
-      alert('Failed to upload file. Please try again.');
+      toast.error('Failed to upload file. Please try again.');
     } finally {
       setIsUploading(false);
     }

@@ -176,6 +176,24 @@ export const mockDeals: Deal[] = [
     createdAt: new Date('2026-01-10T08:00:00Z'),
     updatedAt: new Date('2026-01-10T08:00:00Z'),
   },
+  {
+    dealId: '0xdraft123456789abcdef1234567890abcdef1234567890abcdef1234567890ab',
+    name: 'New Deal - CloudTech Acquisition',
+    closingDate: new Date('2026-06-01'),
+    currency: 'USD',
+    buyer: MOCK_ADDRESSES.buyer,
+    seller: MOCK_ADDRESSES.seller,
+    auditor: MOCK_ADDRESSES.auditor,
+    status: 'draft' as DealStatusEnum,
+    periods: [],
+    metadata: {
+      industry: 'Cloud Computing',
+      dealSize: '40M USD',
+      notes: 'Parameters not yet configured',
+    },
+    createdAt: new Date('2025-11-17T10:00:00Z'),
+    updatedAt: new Date('2025-11-17T10:00:00Z'),
+  },
 ];
 
 // Mock Deal Summaries
@@ -204,7 +222,7 @@ export const mockDashboardResponse: DashboardResponse = ({
       seller: MOCK_ADDRESSES.seller,
       auditor: MOCK_ADDRESSES.auditor,
     },
-    userRole: 'buyer',
+    userRole: 'seller',
   },
   periodsSummary: [
     {
@@ -264,8 +282,8 @@ export const mockDashboardResponse: DashboardResponse = ({
       kpiStatus: 'not_proposed',
       settlementStatus: 'not_settled',
       nextAction: {
-        action: 'Upload Financial Data',
-        actor: 'buyer',
+        action: 'Upload Financial Documents',
+        actor: 'seller',
         deadline: '2029-01-31',
       },
     },
@@ -324,3 +342,67 @@ export const mockDashboardResponse: DashboardResponse = ({
     ],
   },
 }) as any;
+
+// Mock Dashboard Response for Draft Deal
+export const mockDraftDealDashboard: DashboardResponse = ({
+  dealInfo: {
+    dealId: '0xdraft123456789abcdef1234567890abcdef1234567890abcdef1234567890ab',
+    name: 'New Deal - CloudTech Acquisition',
+    closingDate: new Date('2026-06-01'),
+    currency: 'USD',
+    status: 'draft',
+    roles: {
+      buyer: MOCK_ADDRESSES.buyer,
+      seller: MOCK_ADDRESSES.seller,
+      auditor: MOCK_ADDRESSES.auditor,
+    },
+    userRole: 'buyer',
+  },
+  periodsSummary: [],
+  recentEvents: [
+    {
+      type: 'deal_created',
+      timestamp: '2025-11-17T10:00:00Z',
+      actor: MOCK_ADDRESSES.buyer,
+      actorRole: 'buyer',
+      description: 'Deal created: New Deal - CloudTech Acquisition',
+      metadata: {
+        dealId: '0xdraft123456789abcdef1234567890abcdef1234567890abcdef1234567890ab',
+      },
+    },
+  ],
+  healthMetrics: {
+    overallProgress: 0,
+    pendingActions: 1,
+    nextDeadline: undefined,
+    dataCompletenessScore: 0,
+    risksDetected: [
+      {
+        severity: 'high',
+        category: 'Configuration',
+        description: 'Deal parameters not yet configured',
+      },
+    ],
+  },
+}) as any;
+
+// Helper to get dashboard by dealId
+export function getDashboardByDealId(dealId: string): DashboardResponse {
+  if (dealId === '0xdraft123456789abcdef1234567890abcdef1234567890abcdef1234567890ab') {
+    return mockDraftDealDashboard;
+  }
+
+  // Default: return first deal's dashboard with updated dealId
+  const deal = mockDeals.find(d => d.dealId === dealId) || mockDeals[0];
+  return {
+    ...mockDashboardResponse,
+    dealInfo: {
+      ...mockDashboardResponse.dealInfo,
+      dealId: deal.dealId,
+      name: deal.name,
+      closingDate: deal.closingDate,
+      currency: deal.currency,
+      status: deal.status,
+    },
+  } as any;
+}
