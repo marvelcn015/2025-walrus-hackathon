@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useRole } from '@/src/frontend/contexts/RoleContext';
 import { useDashboard, usePendingActions } from '@/src/frontend/hooks/useDashboard';
 import { DealInfoSection } from '@/src/frontend/components/deals/DealInfoSection';
 import { PeriodCard } from '@/src/frontend/components/deals/PeriodCard';
@@ -16,6 +17,7 @@ export default function DealDashboardPage() {
   const params = useParams();
   const router = useRouter();
   const currentAccount = useCurrentAccount();
+  const { currentRole } = useRole();
   const dealId = params.dealId as string;
 
   const { data: dashboard, isLoading, error } = useDashboard(dealId);
@@ -126,7 +128,7 @@ export default function DealDashboardPage() {
               </div>
             </div>
 
-            {dealInfo.status === 'draft' && dealInfo.userRole === 'buyer' && (
+            {dealInfo.status === 'draft' && currentRole === 'buyer' && (
               <Button asChild>
                 <Link href={`/deals/${dealId}/setup`}>
                   Configure Parameters
@@ -185,7 +187,7 @@ export default function DealDashboardPage() {
                     <p className="text-muted-foreground mb-4">
                       No periods configured yet
                     </p>
-                    {dealInfo.userRole === 'buyer' && dealInfo.status === 'draft' && (
+                    {currentRole === 'buyer' && dealInfo.status === 'draft' && (
                       <Button asChild>
                         <Link href={`/deals/${dealId}/setup`}>
                           Set Up Periods

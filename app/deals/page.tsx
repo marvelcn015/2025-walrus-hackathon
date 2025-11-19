@@ -1,6 +1,7 @@
 'use client';
 
 import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useRole } from '@/src/frontend/contexts/RoleContext';
 import { useDeals, useDealStats } from '@/src/frontend/hooks/useDeals';
 import { DealCard } from '@/src/frontend/components/deals/DealCard';
 import { CreateDealDialog } from '@/src/frontend/components/deals/CreateDealDialog';
@@ -11,6 +12,7 @@ import { Loader2, Briefcase, TrendingUp, CheckCircle2, FileText, Wallet } from '
 
 export default function DealsPage() {
   const currentAccount = useCurrentAccount();
+  const { currentRole } = useRole();
   const { data: dealsData, isLoading, error } = useDeals('buyer');
   const stats = useDealStats('buyer');
 
@@ -73,9 +75,11 @@ export default function DealsPage() {
                 Manage your earn-out agreements and track settlements
               </p>
             </div>
-            <div>
-              <CreateDealDialog />
-            </div>
+            {currentRole === 'buyer' && (
+              <div>
+                <CreateDealDialog />
+              </div>
+            )}
           </div>
 
           {/* Stats Cards */}
@@ -130,11 +134,15 @@ export default function DealsPage() {
                   <Briefcase className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-2xl font-semibold mb-2">No deals yet</h3>
                   <p className="text-muted-foreground mb-6">
-                    Get started by creating your first earn-out deal
+                    {currentRole === 'buyer'
+                      ? 'Get started by creating your first earn-out deal'
+                      : 'No deals available to view'}
                   </p>
-                  <CreateDealDialog>
-                    <Button size="lg">Create Your First Deal</Button>
-                  </CreateDealDialog>
+                  {currentRole === 'buyer' && (
+                    <CreateDealDialog>
+                      <Button size="lg">Create Your First Deal</Button>
+                    </CreateDealDialog>
+                  )}
                 </div>
               </div>
             ) : (

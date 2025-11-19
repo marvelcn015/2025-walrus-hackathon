@@ -83,40 +83,40 @@ export function PeriodCard({ period, dealId, userRole }: PeriodCardProps) {
   };
 
   const getActionButton = () => {
-    if (!period.nextAction || period.nextAction.actor !== userRole || !period.nextAction.action) {
-      return null;
-    }
+    // All roles can view period details (documents page)
+    // Button variant and text changes based on role
+    const hasDocuments = period.dataUploadProgress && period.dataUploadProgress.blobCount > 0;
+    const isSettled = period.settlementStatus === 'settled';
 
-    const action = period.nextAction.action.toLowerCase();
-
-    if (action.includes('upload') && userRole === 'seller') {
+    // Show the button for all roles
+    if (userRole === 'buyer') {
       return (
-        <Button asChild size="sm">
+        <Button asChild size="sm" variant={isSettled ? 'outline' : 'default'}>
           <Link href={`/deals/${dealId}/periods/${period.periodId}/upload`}>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Documents
-          </Link>
-        </Button>
-      );
-    }
-
-    if (action.includes('review') && userRole === 'auditor') {
-      return (
-        <Button asChild size="sm">
-          <Link href={`/deals/${dealId}/periods/${period.periodId}/review`}>
             <FileCheck className="mr-2 h-4 w-4" />
-            Review Data
+            {isSettled ? 'View Period Details' : 'Manage Documents'}
           </Link>
         </Button>
       );
     }
 
-    if (action.includes('approve') && userRole === 'buyer') {
+    if (userRole === 'seller') {
       return (
-        <Button asChild size="sm">
-          <Link href={`/deals/${dealId}/periods/${period.periodId}/approve`}>
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Review & Approve
+        <Button asChild size="sm" variant="outline">
+          <Link href={`/deals/${dealId}/periods/${period.periodId}/upload`}>
+            <FileCheck className="mr-2 h-4 w-4" />
+            View Period Details
+          </Link>
+        </Button>
+      );
+    }
+
+    if (userRole === 'auditor') {
+      return (
+        <Button asChild size="sm" variant={hasDocuments ? 'default' : 'outline'}>
+          <Link href={`/deals/${dealId}/periods/${period.periodId}/upload`}>
+            <FileCheck className="mr-2 h-4 w-4" />
+            {hasDocuments ? 'Review Documents' : 'View Period Details'}
           </Link>
         </Button>
       );

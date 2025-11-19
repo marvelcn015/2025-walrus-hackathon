@@ -3,6 +3,7 @@
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useRole } from '@/src/frontend/contexts/RoleContext';
 import { WalletButton } from '@/src/frontend/components/wallet/WalletButton';
+import { RoleAccessMessage } from '@/src/frontend/components/common/RoleAccessMessage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -108,18 +109,11 @@ export default function SettlementsPage() {
         </section>
 
         <section className="container mx-auto px-4 py-20 max-w-7xl">
-          <Card>
-            <CardContent className="pt-6 pb-6">
-              <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">
-                  Settlement history is only available for Seller role.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Current role: <Badge variant="outline" className="capitalize">{currentRole}</Badge>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <RoleAccessMessage
+            allowedRole="seller"
+            currentRole={currentRole}
+            featureName="Settlement history"
+          />
         </section>
       </div>
     );

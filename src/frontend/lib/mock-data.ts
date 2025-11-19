@@ -49,6 +49,22 @@ const mockFormula: EarnoutFormula = {
   },
 };
 
+// Extended WalrusBlob type for mock data with audit status
+export type WalrusBlobWithAudit = {
+  blobId: string;
+  commitment?: string;
+  dataType: string;
+  size: number;
+  uploadedAt: string;
+  uploaderAddress: string;
+  metadata?: any;
+  // Audit fields (not in OpenAPI spec, for frontend dev only)
+  reviewStatus?: 'pending' | 'approved' | 'changes_requested';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+};
+
 // Mock Periods
 const mockPeriods: Period[] = ([
   {
@@ -73,6 +89,10 @@ const mockPeriods: Period[] = ([
           encrypted: true,
           sealPolicyId: 'seal_policy_001',
         },
+        reviewStatus: 'approved',
+        reviewedBy: MOCK_ADDRESSES.auditor,
+        reviewedAt: '2026-04-20T14:30:00Z',
+        reviewNotes: 'Revenue data verified. All transactions properly documented.',
       },
     ],
     kpiProposal: {
@@ -114,7 +134,44 @@ const mockPeriods: Period[] = ([
     kpiTypes: mockKPITypes,
     formula: mockFormula,
     status: 'kpi_attested' as PeriodStatusEnum,
-    walrusBlobs: [],
+    walrusBlobs: [
+      {
+        blobId: 'blob_2027_revenue_q1',
+        commitment: 'commitment_hash_2027_q1',
+        dataType: 'revenue_journal',
+        size: 2156789,
+        uploadedAt: '2027-04-10T09:15:00Z',
+        uploaderAddress: MOCK_ADDRESSES.buyer,
+        metadata: {
+          filename: 'Q1_2027_Revenue.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          encrypted: true,
+          sealPolicyId: 'seal_policy_001',
+        },
+        reviewStatus: 'approved',
+        reviewedBy: MOCK_ADDRESSES.auditor,
+        reviewedAt: '2027-04-15T11:20:00Z',
+        reviewNotes: 'Q1 revenue verified.',
+      },
+      {
+        blobId: 'blob_2027_revenue_q2',
+        commitment: 'commitment_hash_2027_q2',
+        dataType: 'revenue_journal',
+        size: 2234567,
+        uploadedAt: '2027-07-12T10:00:00Z',
+        uploaderAddress: MOCK_ADDRESSES.buyer,
+        metadata: {
+          filename: 'Q2_2027_Revenue.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          encrypted: true,
+          sealPolicyId: 'seal_policy_001',
+        },
+        reviewStatus: 'changes_requested',
+        reviewedBy: MOCK_ADDRESSES.auditor,
+        reviewedAt: '2027-07-18T14:30:00Z',
+        reviewNotes: 'Please provide supporting invoices for the revenue entries in June. Some transactions lack proper documentation.',
+      },
+    ],
   },
   {
     periodId: 'period_2028',
@@ -124,7 +181,38 @@ const mockPeriods: Period[] = ([
     kpiTypes: mockKPITypes,
     formula: mockFormula,
     status: 'pending' as PeriodStatusEnum,
-    walrusBlobs: [],
+    walrusBlobs: [
+      {
+        blobId: 'blob_2028_revenue_q1',
+        commitment: 'commitment_hash_2028_q1',
+        dataType: 'revenue_journal',
+        size: 1987654,
+        uploadedAt: '2028-04-05T08:30:00Z',
+        uploaderAddress: MOCK_ADDRESSES.buyer,
+        metadata: {
+          filename: 'Q1_2028_Revenue.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          encrypted: true,
+          sealPolicyId: 'seal_policy_001',
+        },
+        reviewStatus: 'pending',
+      },
+      {
+        blobId: 'blob_2028_ebitda',
+        commitment: 'commitment_hash_2028_ebitda',
+        dataType: 'ebitda_report',
+        size: 1654321,
+        uploadedAt: '2028-04-08T14:00:00Z',
+        uploaderAddress: MOCK_ADDRESSES.buyer,
+        metadata: {
+          filename: 'Q1_2028_EBITDA.pdf',
+          mimeType: 'application/pdf',
+          encrypted: true,
+          sealPolicyId: 'seal_policy_001',
+        },
+        reviewStatus: 'pending',
+      },
+    ],
   },
 ]) as any;
 

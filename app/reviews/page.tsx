@@ -3,6 +3,7 @@
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useRole } from '@/src/frontend/contexts/RoleContext';
 import { WalletButton } from '@/src/frontend/components/wallet/WalletButton';
+import { RoleAccessMessage } from '@/src/frontend/components/common/RoleAccessMessage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -126,20 +127,11 @@ export default function ReviewsPage() {
         </section>
 
         <section className="container mx-auto px-4 py-20 max-w-7xl">
-          <Card>
-            <CardContent className="pt-6 pb-6">
-              <div className="text-center py-8">
-                <AlertCircle className="h-16 w-16 mx-auto text-amber-500 mb-4" />
-                <h2 className="text-2xl font-semibold mb-2">Auditor Access Required</h2>
-                <p className="text-muted-foreground mb-4">
-                  Review history is only available for Auditor role.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Current role: <Badge variant="outline" className="capitalize">{currentRole}</Badge>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <RoleAccessMessage
+            allowedRole="auditor"
+            currentRole={currentRole}
+            featureName="Review history"
+          />
         </section>
       </div>
     );
