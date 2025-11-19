@@ -470,7 +470,9 @@ export class WalrusController {
       }
 
       // Return binary data with metadata headers
-      return new NextResponse(dataToReturn, {
+      // Convert Buffer to Uint8Array for proper Blob compatibility
+      const dataArray = new Uint8Array(dataToReturn);
+      return new NextResponse(new Blob([dataArray]), {
         status: 200,
         headers,
       });

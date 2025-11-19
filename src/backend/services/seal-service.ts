@@ -237,16 +237,13 @@ export class SealService {
       // Create session key for decryption
       // In server-side mode, we use backend keypair as trusted intermediary
       // Note: SessionKey expects packageId as a hex string (with 0x prefix)
-      const sessionKey = new SessionKey({
+      const sessionKey = await SessionKey.create({
         address: this.backendKeypair.toSuiAddress(),
         packageId: packageId,
         ttlMin: 10, // 10 minute session
+        signer: this.backendKeypair,
+        suiClient: this.suiClient,
       });
-
-      // Sign the session key's personal message
-      const message = sessionKey.getPersonalMessage();
-      const { signature } = await this.backendKeypair.signPersonalMessage(message);
-      sessionKey.setPersonalMessageSignature(signature);
 
       // Build approval transaction that calls seal_approve from whitelist module
       // This transaction is NOT executed, just used for verification

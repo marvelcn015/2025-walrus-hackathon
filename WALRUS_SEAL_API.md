@@ -55,11 +55,9 @@ app/api/v1/walrus/
 src/backend/
 ├── controllers/
 │   └── walrus-controller.ts  # HTTP request handling, validation, orchestration
-├── services/
-│   ├── walrus-service.ts     # Walrus storage operations
-│   └── seal-service.ts       # Seal encryption/decryption operations
-└── models/
-    └── (to be implemented)
+└── services/
+    ├── walrus-service.ts     # Walrus storage operations
+    └── seal-service.ts       # Seal encryption/decryption operations
 ```
 
 ### Shared Types
@@ -182,17 +180,17 @@ X-Custom-Data-Type: inventory_report (optional, when dataType is "custom")
 
 **Metadata Headers:**
 
-| Header               | Description                           | Always Present |
-| -------------------- | ------------------------------------- | -------------- |
-| Content-Type         | Original file MIME type               | Yes            |
-| Content-Disposition  | Attachment with original filename     | If filename    |
-| X-Filename           | Original filename                     | If filename    |
-| X-Data-Type          | Data type (revenue_journal, etc.)     | Yes            |
-| X-Period-Id          | Period identifier                     | Yes            |
-| X-Uploaded-At        | Upload timestamp (ISO 8601)           | Yes            |
-| X-Uploader-Address   | Sui address of uploader               | Yes            |
-| X-Description        | File description                      | Optional       |
-| X-Custom-Data-Type   | Custom data type name                 | Optional       |
+| Header              | Description                       | Always Present |
+| ------------------- | --------------------------------- | -------------- |
+| Content-Type        | Original file MIME type           | Yes            |
+| Content-Disposition | Attachment with original filename | If filename    |
+| X-Filename          | Original filename                 | If filename    |
+| X-Data-Type         | Data type (revenue_journal, etc.) | Yes            |
+| X-Period-Id         | Period identifier                 | Yes            |
+| X-Uploaded-At       | Upload timestamp (ISO 8601)       | Yes            |
+| X-Uploader-Address  | Sui address of uploader           | Yes            |
+| X-Description       | File description                  | Optional       |
+| X-Custom-Data-Type  | Custom data type name             | Optional       |
 
 **Error Responses:**
 
@@ -289,62 +287,15 @@ DEBUG_SEAL="true"  # For verbose logging
 
 **Tests Covered:**
 
-| Test | Description | Status |
-|------|-------------|--------|
-| Test 1 | Create Whitelist | ✅ Pass |
-| Test 2 | Add Addresses to Whitelist | ✅ Pass |
-| Test 3 | Verify Access (whitelisted + non-whitelisted) | ✅ Pass |
-| Test 4 | Remove Address from Whitelist | ✅ Pass |
-| Test 5 | Encryption with Whitelist Policy | ✅ Pass |
-| Test 6 | Decryption with Whitelisted Address | ✅ Pass |
+| Test   | Description                                      | Status  |
+| ------ | ------------------------------------------------ | ------- |
+| Test 1 | Create Whitelist                                 | ✅ Pass |
+| Test 2 | Add Addresses to Whitelist                       | ✅ Pass |
+| Test 3 | Verify Access (whitelisted + non-whitelisted)    | ✅ Pass |
+| Test 4 | Remove Address from Whitelist                    | ✅ Pass |
+| Test 5 | Encryption with Whitelist Policy                 | ✅ Pass |
+| Test 6 | Decryption with Whitelisted Address              | ✅ Pass |
 | Test 7 | Decryption Rejection for Non-Whitelisted Address | ✅ Pass |
-
-**What the Test Validates:**
-
-1. **Whitelist Management**: Create whitelist, add/remove addresses, verify access control
-2. **Encryption**: Encrypt data using Seal with whitelist policy
-3. **Decryption**: Decrypt data as whitelisted user
-4. **Access Control**: Verify non-whitelisted addresses cannot decrypt
-
-**Example Output:**
-
-```
-============================================================
-SealService Whitelist Test Script
-============================================================
-
-SealService initialized
-Backend address: 0x1234...
-
-------------------------------------------------------------
-Test 1: Create Whitelist
-------------------------------------------------------------
-Whitelist created successfully!
-  Transaction Digest: 7abc123...
-  Whitelist ID: 0x572960a3...
-  Cap ID: 0x299098c9...
-
-------------------------------------------------------------
-Test 5: Encryption & Decryption
-------------------------------------------------------------
-Encryption successful!
-  Original data: Hello, Seal encryption test!
-  Ciphertext size: 256 bytes
-  Commitment: 0x...
-  Policy Object ID: 0x572960a3...
-
-------------------------------------------------------------
-Test 6: Decryption
-------------------------------------------------------------
-Decryption successful!
-  Decrypted data: Hello, Seal encryption test!
-  Data integrity check: PASSED
-
-============================================================
-Test Summary
-============================================================
-All tests completed successfully!
-```
 
 ---
 
@@ -602,80 +553,6 @@ async function downloadPlaintext(
 
 ---
 
-## Known Issues
-
-### Critical Issues
-
-#### 1. WASM File Loading Failure
-
-**Error Message:**
-
-```
-ENOENT: no such file or directory, open '/ROOT/node_modules/@mysten/walrus-wasm/walrus_wasm_bg.wasm'
-```
-
-**Impact:** All Walrus operations completely non-functional
-
-**Root Cause:** `@mysten/walrus` SDK resolves WASM file path incorrectly in Next.js environment
-
-**Possible Solutions:**
-
-1. Upgrade `@mysten/walrus` to latest version
-2. Configure Next.js `next.config.js` for WASM handling
-3. Use HTTP to call Walrus aggregator directly (bypass SDK)
-
----
-
-#### 2. Transaction Bytes Not Generated
-
-**Location:** `walrus-controller.ts:175`
-
-```typescript
-transaction: {
-  txBytes: '', // TODO: Generate actual transaction bytes
-  description: `Register Walrus blob: ${dataType} for ${periodId}`,
-}
-```
-
-**Impact:** Frontend cannot complete on-chain registration step
-
----
-
-### ~~Low Priority Issues~~ Resolved
-
-#### ~~3. Blob Metadata Storage~~ ✅ Fixed
-
-**Solution Implemented: Walrus Metadata Envelope**
-
-Metadata is now persisted alongside the blob data using a **metadata envelope format**. When uploading, metadata is prepended to the actual data. When downloading, metadata is extracted and returned in response headers.
-
-**Envelope Format:**
-
-```
-[4 bytes: metadata length (uint32 BE)][metadata JSON][actual data]
-```
-
-**How it works:**
-
-1. **Upload**: `walrusService.upload()` automatically wraps data with metadata envelope
-2. **Download**: `walrusService.downloadWithMetadata()` extracts metadata from envelope
-3. **Response**: Controller returns metadata in HTTP headers (see [Download Response](#get-apiv1walrusdownloadblobid))
-
-**Benefits:**
-
-- ✅ Metadata travels with data (no separate storage needed)
-- ✅ Download response includes filename, mimeType, dataType, periodId, etc.
-- ✅ Frontend can display file list with proper names and types
-- ✅ Backward compatible (legacy blobs without envelope return raw data)
-
-**Implementation Files:**
-
-- `src/shared/types/walrus.ts` - `WalrusMetadataEnvelope` interface
-- `src/backend/services/walrus-service.ts` - `wrapWithMetadataEnvelope()`, `unwrapMetadataEnvelope()`
-- `src/backend/controllers/walrus-controller.ts` - Metadata in response headers
-
----
-
 ## Environment Configuration
 
 ### Required Configuration
@@ -688,14 +565,18 @@ SUI_NETWORK="testnet"
 SUI_RPC_URL="https://fullnode.testnet.sui.io:443"
 SUI_BACKEND_PRIVATE_KEY="base64_encoded_key"  # Required for server_encrypted mode
 
-# Walrus Configuration
-WALRUS_AGGREGATOR_URL="https://aggregator-testnet.walrus.space"
+# Walrus Configuration (HTTP API mode)
+WALRUS_AGGREGATOR_URL="https://aggregator.walrus-testnet.walrus.space"
+WALRUS_PUBLISHER_URL="https://publisher.walrus-testnet.walrus.space"
 WALRUS_STORAGE_EPOCHS="1"
 WALRUS_MAX_FILE_SIZE="104857600"  # 100MB
 
 # Seal Configuration
 SEAL_KEY_SERVER_OBJECT_IDS="0x73d05d62...,0xf5d14a81..."
 SEAL_POLICY_OBJECT_ID="0x..."  # Set after deploying Move contract
+
+# Earnout Contract Configuration
+EARNOUT_PACKAGE_ID="0x..."  # Required for transaction byte generation
 
 # Application Configuration
 DEFAULT_UPLOAD_MODE="client_encrypted"
@@ -718,29 +599,6 @@ TEST_CAP_ID="0x299098c9..."
 
 ---
 
-## Next Steps
-
-### Immediate Fixes (Blocking Issues)
-
-1. **Resolve WASM Loading Issue**
-
-   - Check `@mysten/walrus` version
-   - Configure Next.js WASM support
-   - Or switch to HTTP API for aggregator calls
-
-2. ~~**Implement Missing Seal Methods**~~ ✅ Done - Controller correctly uses existing methods
-
-3. ~~**Unify Interface Definitions**~~ ✅ Done - Using `WhitelistEncryptionConfig`
-
-### Follow-up Optimizations
-
-4. ~~Implement signature verification~~ ✅ Done
-5. Generate actual transaction bytes
-6. ~~Add unit and integration tests~~ ✅ Done - SealService whitelist tests passing
-7. ~~Implement metadata persistence~~ ✅ Done (Walrus metadata envelope)
-
----
-
 ## Related Resources
 
 - [Walrus SDK Documentation](https://docs.walrus.site/)
@@ -750,4 +608,4 @@ TEST_CAP_ID="0x299098c9..."
 
 ---
 
-_Document last updated: 2025-11-19_
+_Document last updated: 2025-11-20_

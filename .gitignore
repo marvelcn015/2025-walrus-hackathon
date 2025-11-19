@@ -20,6 +20,9 @@
 # production
 /build
 
+# temporary
+/tmp
+
 # misc
 .DS_Store
 *.pem
@@ -63,8 +66,7 @@ logs
 dev-debug.log
 # Dependency directories
 node_modules/
-# Environment variables
-.env
+
 # Editor directories and files
 .idea
 .vscode
@@ -73,7 +75,6 @@ node_modules/
 *.njsproj
 *.sln
 *.sw?
-# OS specific
 
 # Task files
 # tasks.json

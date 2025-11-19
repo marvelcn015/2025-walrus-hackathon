@@ -2,12 +2,9 @@
  * Walrus Storage Service
  *
  * Handles file upload and download operations with Walrus decentralized storage.
- * Provides backend relay for uploading encrypted files to Walrus network.
+ * Uses HTTP API to bypass WASM loading issues in Next.js environment.
  */
 
-import { WalrusClient, TESTNET_WALRUS_PACKAGE_CONFIG } from '@mysten/walrus';
-import { SuiClient } from '@mysten/sui/client';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { config, debugConfig } from '@/src/shared/config/env';
 import type {
   WalrusUploadResult,
@@ -20,47 +17,56 @@ import type {
 // Current envelope format version
 const ENVELOPE_VERSION = 1;
 
+// Walrus aggregator response types
+interface WalrusStoreResponse {
+  newlyCreated?: {
+    blobObject: {
+      id: string;
+      storedEpoch: number;
+      blobId: string;
+      size: number;
+      erasureCodeType: string;
+      certifiedEpoch: number;
+      storage: {
+        id: string;
+        startEpoch: number;
+        endEpoch: number;
+        storageSize: number;
+      };
+    };
+    resourceOperation: {
+      RegisterFromScratch?: {
+        encoded_length: number;
+        epochs_ahead: number;
+      };
+    };
+    cost: number;
+  };
+  alreadyCertified?: {
+    blobId: string;
+    endEpoch: number;
+  };
+}
+
 /**
  * Walrus Service for backend file operations
+ * Uses HTTP API to Walrus aggregator (bypasses WASM issues)
  */
 export class WalrusService {
-  private walrusClient: WalrusClient;
-  private suiClient: SuiClient;
-  private backendKeypair: Ed25519Keypair | null = null;
+  private aggregatorUrl: string;
+  private publisherUrl: string;
 
   constructor() {
-    // Initialize Sui client
-    this.suiClient = new SuiClient({
-      url: config.sui.rpcUrl!,
-    });
-
-    // Initialize Walrus client
-    const packageConfig =
-      config.sui.network === 'mainnet'
-        ? TESTNET_WALRUS_PACKAGE_CONFIG // TODO: Use MAINNET_WALRUS_PACKAGE_CONFIG when available
-        : TESTNET_WALRUS_PACKAGE_CONFIG;
-
-    this.walrusClient = new WalrusClient({
-      suiClient: this.suiClient,
-      packageConfig,
-      // Configure storage nodes from environment
-      // Note: In production, this should dynamically discover storage nodes
-    });
-
-    // Initialize backend keypair for signing transactions
-    if (config.sui.backendPrivateKey) {
-      try {
-        const privateKeyBytes = Buffer.from(config.sui.backendPrivateKey, 'base64');
-        this.backendKeypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
-      } catch (error) {
-        console.error('Failed to initialize backend keypair for Walrus:', error);
-      }
-    }
+    // Use aggregator URL for both read and write
+    // Publisher is typically at a different endpoint for writes
+    this.aggregatorUrl = config.walrus.aggregatorUrl || 'https://aggregator.walrus-testnet.walrus.space';
+    this.publisherUrl = config.walrus.publisherUrl || 'https://publisher.walrus-testnet.walrus.space';
 
     if (debugConfig.walrus) {
-      console.log('WalrusService initialized');
+      console.log('WalrusService initialized (HTTP API mode)');
       console.log('Network:', config.sui.network);
-      console.log('Aggregator URL:', config.walrus.aggregatorUrl);
+      console.log('Aggregator URL:', this.aggregatorUrl);
+      console.log('Publisher URL:', this.publisherUrl);
       console.log('Storage Epochs:', config.walrus.storageEpochs);
     }
   }
@@ -79,7 +85,7 @@ export class WalrusService {
   async upload(data: Buffer, metadata: BlobMetadata): Promise<WalrusUploadResult> {
     try {
       if (debugConfig.walrus) {
-        console.log('Uploading to Walrus via relay');
+        console.log('Uploading to Walrus via HTTP API');
         console.log('Data size:', data.length, 'bytes');
         console.log('Storage epochs:', config.walrus.storageEpochs);
       }
@@ -91,11 +97,6 @@ export class WalrusService {
         );
       }
 
-      // Check if backend keypair is available
-      if (!this.backendKeypair) {
-        throw new Error('Backend keypair not configured for Walrus uploads');
-      }
-
       // Wrap data with metadata envelope
       const envelopedData = this.wrapWithMetadataEnvelope(data, metadata);
 
@@ -104,32 +105,55 @@ export class WalrusService {
         console.log('Metadata included:', JSON.stringify(metadata).substring(0, 100) + '...');
       }
 
-      // Convert Buffer to Uint8Array for Walrus SDK
-      const blob = new Uint8Array(envelopedData);
+      // Upload using Walrus Publisher HTTP API
+      // PUT /v1/blobs with epochs query parameter
+      const url = `${this.publisherUrl}/v1/blobs?epochs=${config.walrus.storageEpochs}`;
 
-      // Upload using upload relay pattern
-      // Note: writeBlobToUploadRelay handles the heavy lifting of encoding and distributing to storage nodes
-      const result = await this.walrusClient.writeBlobToUploadRelay({
-        blob,
-        deletable: true, // Allow blob deletion after expiry
-        epochs: config.walrus.storageEpochs,
-        signer: this.backendKeypair,
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+        body: new Uint8Array(envelopedData),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Walrus upload failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const result: WalrusStoreResponse = await response.json();
+
+      if (debugConfig.walrus) {
+        console.log('Upload response:', JSON.stringify(result, null, 2));
+      }
+
+      // Extract blob ID and end epoch from response
+      let blobId: string;
+      let endEpoch: number;
+      let commitment: string;
+
+      if (result.newlyCreated) {
+        blobId = result.newlyCreated.blobObject.blobId;
+        endEpoch = result.newlyCreated.blobObject.storage.endEpoch;
+        commitment = result.newlyCreated.blobObject.id;
+      } else if (result.alreadyCertified) {
+        blobId = result.alreadyCertified.blobId;
+        endEpoch = result.alreadyCertified.endEpoch;
+        commitment = `walrus:${blobId}`;
+      } else {
+        throw new Error('Unexpected response format from Walrus');
+      }
 
       if (debugConfig.walrus) {
         console.log('Upload successful');
-        console.log('Blob ID:', result.blobId);
-        console.log('Certificate:', result.certificate);
+        console.log('Blob ID:', blobId);
+        console.log('End Epoch:', endEpoch);
       }
 
-      // Calculate end epoch
-      const systemState = await this.walrusClient.systemState();
-      const currentEpoch = systemState.committee.epoch;
-      const endEpoch = currentEpoch + config.walrus.storageEpochs;
-
       const uploadResult: WalrusUploadResult = {
-        blobId: result.blobId,
-        commitment: this.formatCertificate(result.certificate),
+        blobId,
+        commitment,
         size: data.length, // Original data size (without envelope)
         uploadedAt: new Date().toISOString(),
         storageEpochs: config.walrus.storageEpochs,
@@ -155,22 +179,31 @@ export class WalrusService {
   async download(blobId: string): Promise<Buffer> {
     try {
       if (debugConfig.walrus) {
-        console.log('Downloading from Walrus');
+        console.log('Downloading from Walrus via HTTP API');
         console.log('Blob ID:', blobId);
       }
 
-      // Read blob from Walrus storage nodes
-      const data = await this.walrusClient.readBlob({
-        blobId,
-      });
+      // Download using Walrus Aggregator HTTP API
+      // GET /v1/blobs/{blobId}
+      const url = `${this.aggregatorUrl}/v1/blobs/${blobId}`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`Blob not found: ${blobId}`);
+        }
+        const errorText = await response.text();
+        throw new Error(`Walrus download failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
       if (debugConfig.walrus) {
         console.log('Download successful');
-        console.log('Data size:', data.length, 'bytes');
+        console.log('Data size:', buffer.length, 'bytes');
       }
-
-      // Convert Uint8Array to Buffer
-      const buffer = Buffer.from(data);
 
       // Extract data from envelope (for backward compatibility)
       try {
@@ -197,22 +230,30 @@ export class WalrusService {
   async downloadWithMetadata(blobId: string): Promise<WalrusDownloadWithMetadataResult> {
     try {
       if (debugConfig.walrus) {
-        console.log('Downloading from Walrus with metadata');
+        console.log('Downloading from Walrus with metadata via HTTP API');
         console.log('Blob ID:', blobId);
       }
 
-      // Read blob from Walrus storage nodes
-      const rawData = await this.walrusClient.readBlob({
-        blobId,
-      });
+      // Download using Walrus Aggregator HTTP API
+      const url = `${this.aggregatorUrl}/v1/blobs/${blobId}`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`Blob not found: ${blobId}`);
+        }
+        const errorText = await response.text();
+        throw new Error(`Walrus download failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
 
       if (debugConfig.walrus) {
         console.log('Download successful');
-        console.log('Raw data size:', rawData.length, 'bytes');
+        console.log('Raw data size:', buffer.length, 'bytes');
       }
-
-      // Convert Uint8Array to Buffer
-      const buffer = Buffer.from(rawData);
 
       // Extract data and metadata from envelope
       const result = this.unwrapMetadataEnvelope(buffer);
@@ -233,6 +274,7 @@ export class WalrusService {
 
   /**
    * Get blob metadata and status
+   * Note: Limited information available via HTTP API
    *
    * @param blobId - Blob ID to query
    * @returns Blob information
@@ -240,36 +282,37 @@ export class WalrusService {
   async getBlobInfo(blobId: string): Promise<BlobInfo> {
     try {
       if (debugConfig.walrus) {
-        console.log('Getting blob info');
+        console.log('Getting blob info via HTTP API');
         console.log('Blob ID:', blobId);
       }
 
-      // Get blob status from storage nodes
-      const status = await this.walrusClient.getVerifiedBlobStatus({
-        blobId,
-      });
+      // Try to download the blob to get its size
+      // This is a workaround since HTTP API doesn't have a dedicated info endpoint
+      const url = `${this.aggregatorUrl}/v1/blobs/${blobId}`;
+      const response = await fetch(url, { method: 'HEAD' });
 
-      // Get blob metadata
-      const metadata = await this.walrusClient.getBlobMetadata({
-        blobId,
-      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`Blob not found: ${blobId}`);
+        }
+        throw new Error(`Failed to get blob info: ${response.status}`);
+      }
 
-      const systemState = await this.walrusClient.systemState();
-      const currentEpoch = systemState.committee.epoch;
+      const contentLength = response.headers.get('content-length');
+      const size = contentLength ? parseInt(contentLength, 10) : 0;
 
       const blobInfo: BlobInfo = {
         blobId,
-        size: Number(metadata.metadata.V1.unencoded_length),
-        commitment: this.formatMetadata(metadata),
-        uploadedAt: new Date().toISOString(), // TODO: Get actual upload time from blockchain
-        storageEpochs: 0, // TODO: Calculate from end_epoch - start_epoch
-        endEpoch: currentEpoch, // TODO: Get from blob object on Sui
+        size,
+        commitment: `walrus:${blobId}`,
+        uploadedAt: new Date().toISOString(), // Not available via HTTP API
+        storageEpochs: config.walrus.storageEpochs,
+        endEpoch: 0, // Not available via HTTP API
       };
 
       if (debugConfig.walrus) {
         console.log('Blob info retrieved');
         console.log('Size:', blobInfo.size, 'bytes');
-        console.log('Status:', status);
       }
 
       return blobInfo;
@@ -283,10 +326,11 @@ export class WalrusService {
 
   /**
    * Calculate storage cost for a given size and epochs
+   * Note: Returns estimated cost based on current pricing
    *
    * @param size - Data size in bytes
    * @param epochs - Number of storage epochs
-   * @returns Cost breakdown
+   * @returns Cost breakdown (estimated)
    */
   async calculateStorageCost(
     size: number,
@@ -296,52 +340,24 @@ export class WalrusService {
     writeCost: bigint;
     totalCost: bigint;
   }> {
-    try {
-      const cost = await this.walrusClient.storageCost(size, epochs);
+    // Estimated costs based on Walrus pricing
+    // These are placeholder values - actual costs depend on network state
+    const bytesPerUnit = 1024 * 1024; // 1 MB
+    const costPerUnitPerEpoch = BigInt(1000000); // 0.001 SUI per MB per epoch
 
-      if (debugConfig.walrus) {
-        console.log('Storage cost calculated');
-        console.log('Size:', size, 'bytes');
-        console.log('Epochs:', epochs);
-        console.log('Total cost:', cost.totalCost.toString(), 'MIST');
-      }
+    const units = Math.ceil(size / bytesPerUnit);
+    const storageCost = BigInt(units) * costPerUnitPerEpoch * BigInt(epochs);
+    const writeCost = BigInt(units) * BigInt(100000); // 0.0001 SUI per MB write cost
+    const totalCost = storageCost + writeCost;
 
-      return cost;
-    } catch (error) {
-      console.error('Failed to calculate storage cost:', error);
-      throw new Error(
-        `Failed to calculate storage cost: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+    if (debugConfig.walrus) {
+      console.log('Storage cost estimated');
+      console.log('Size:', size, 'bytes');
+      console.log('Epochs:', epochs);
+      console.log('Total cost:', totalCost.toString(), 'MIST');
     }
-  }
 
-  /**
-   * Format certificate as commitment string
-   */
-  private formatCertificate(certificate: any): string {
-    // Extract relevant information from certificate
-    // For now, return a placeholder
-    return `walrus:${JSON.stringify(certificate).substring(0, 64)}`;
-  }
-
-  /**
-   * Format metadata as commitment string
-   */
-  private formatMetadata(metadata: any): string {
-    // Extract hash from metadata
-    try {
-      const primaryHash = metadata.metadata.V1.hashes[0]?.primary_hash;
-      if (primaryHash && primaryHash.$kind === 'Digest') {
-        const hashBytes = primaryHash.Digest;
-        const hashHex = Array.from(hashBytes as Uint8Array)
-          .map((b: number) => b.toString(16).padStart(2, '0'))
-          .join('');
-        return `walrus:${hashHex}`;
-      }
-    } catch (error) {
-      console.error('Failed to extract hash from metadata:', error);
-    }
-    return 'walrus:unknown';
+    return { storageCost, writeCost, totalCost };
   }
 
   /**
