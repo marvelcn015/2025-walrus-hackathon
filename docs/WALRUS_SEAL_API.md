@@ -1,0 +1,600 @@
+# Walrus & Seal API Technical Documentation
+
+This document details the implementation locations, testing methods, frontend integration, and known issues for Walrus storage and Seal encryption APIs.
+
+---
+
+## Table of Contents
+
+1. [API Overview](#api-overview)
+2. [File Locations](#file-locations)
+3. [API Endpoints](#api-endpoints)
+4. [Backend Testing](#backend-testing)
+5. [Frontend Integration](#frontend-integration)
+6. [Known Issues](#known-issues)
+7. [Environment Configuration](#environment-configuration)
+
+---
+
+## API Overview
+
+### Encryption Modes
+
+The system supports two encryption modes:
+
+| Mode | Description | Security | Frontend Complexity |
+|------|-------------|----------|---------------------|
+| `client_encrypted` | Frontend encrypts using Seal SDK, backend only relays | High (zero-knowledge) | High |
+| `server_encrypted` | Backend encrypts/decrypts using Seal SDK | Medium (requires backend trust) | Low |
+
+### Endpoint List
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/walrus/upload` | Upload file to Walrus |
+| GET | `/api/v1/walrus/download/{blobId}` | Download file from Walrus |
+
+---
+
+## File Locations
+
+### API Routes (Next.js App Router)
+
+```
+app/api/v1/walrus/
+├── upload/
+│   └── route.ts              # POST /api/v1/walrus/upload
+└── download/
+    └── [blobId]/
+        └── route.ts          # GET /api/v1/walrus/download/{blobId}
+```
+
+### Backend Layer Architecture
+
+```
+src/backend/
+├── controllers/
+│   └── walrus-controller.ts  # HTTP request handling, validation, orchestration
+├── services/
+│   ├── walrus-service.ts     # Walrus storage operations
+│   └── seal-service.ts       # Seal encryption/decryption operations
+└── models/
+    └── (to be implemented)
+```
+
+### Shared Types
+
+```
+src/shared/
+├── types/
+│   └── walrus.ts             # TypeScript interface definitions
+└── config/
+    └── env.ts                # Environment variable configuration
+```
+
+---
+
+## API Endpoints
+
+### POST /api/v1/walrus/upload
+
+**Function:** Upload file to Walrus distributed storage
+
+**Query Parameters:**
+- `mode`: `client_encrypted` | `server_encrypted` (default: `client_encrypted`)
+
+**Headers:**
+```
+X-Sui-Address: 0x...  # User's Sui address
+X-Sui-Signature: ...  # Signature (currently not verified)
+Content-Type: multipart/form-data
+```
+
+**Form Data:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| file | File | Yes | File content (ciphertext for client_encrypted) |
+| dealId | string | Yes | Deal ID |
+| periodId | string | Yes | Period ID |
+| dataType | string | Yes | Data type |
+| filename | string | No | Filename |
+| description | string | No | File description |
+| customDataType | string | No | Custom data type name |
+
+**Success Response (200):**
+```json
+{
+  "blobId": "ABC123...",
+  "commitment": "walrus:...",
+  "size": 1024,
+  "uploadedAt": "2025-01-01T00:00:00.000Z",
+  "blobReference": {
+    "blobId": "ABC123...",
+    "dataType": "revenue_journal",
+    "uploadedAt": "2025-01-01T00:00:00.000Z",
+    "uploaderAddress": "0x...",
+    "size": 1024,
+    "metadata": { ... }
+  },
+  "nextStep": {
+    "action": "register_on_chain",
+    "description": "Sign transaction to register this blob on-chain",
+    "transaction": {
+      "txBytes": "",
+      "description": "Register Walrus blob: revenue_journal for period1"
+    }
+  }
+}
+```
+
+**Error Responses:**
+- 400: Validation error (missing required fields, file too large, etc.)
+- 401: Missing authentication headers
+- 403: Server encryption disabled
+- 500: Internal error
+
+---
+
+### GET /api/v1/walrus/download/{blobId}
+
+**Function:** Download file from Walrus
+
+**Path Parameters:**
+- `blobId`: Walrus blob ID
+
+**Query Parameters:**
+- `mode`: `client_encrypted` | `server_encrypted` (default: `client_encrypted`)
+- `dealId`: Deal ID (required for authorization)
+
+**Headers:**
+```
+X-Sui-Address: 0x...  # User's Sui address
+X-Sui-Signature: ...  # Signature (currently not verified)
+```
+
+**Success Response (200):**
+```
+Content-Type: application/octet-stream
+Content-Length: 1024
+X-Blob-Id: ABC123...
+X-Encryption-Mode: client_encrypted
+
+[Binary data]
+```
+
+**Error Responses:**
+- 400: Validation error
+- 401: Missing authentication headers
+- 403: No access permission / Server decryption disabled
+- 404: Blob not found
+- 500: Internal error
+
+---
+
+## Backend Testing
+
+### Testing with cURL
+
+**1. Health Check:**
+```bash
+curl http://localhost:3000/api/v1/health
+```
+
+**2. Upload File (client_encrypted mode):**
+```bash
+# Create test file
+echo "Test encrypted data" > /tmp/test.txt
+
+# Upload
+curl -X POST "http://localhost:3000/api/v1/walrus/upload?mode=client_encrypted" \
+  -H "X-Sui-Address: 0x1234..." \
+  -H "X-Sui-Signature: test_sig" \
+  -F "file=@/tmp/test.txt" \
+  -F "dealId=0xdeal123" \
+  -F "periodId=period1" \
+  -F "dataType=revenue_journal" \
+  -F "filename=test.txt"
+```
+
+**3. Download File:**
+```bash
+curl "http://localhost:3000/api/v1/walrus/download/{blobId}?mode=client_encrypted&dealId=0xdeal123" \
+  -H "X-Sui-Address: 0x1234..." \
+  -H "X-Sui-Signature: test_sig" \
+  --output downloaded.bin
+```
+
+### Testing with Jest/Vitest
+
+```typescript
+// tests/walrus-api.test.ts
+import { describe, it, expect } from 'vitest';
+
+describe('Walrus Upload API', () => {
+  it('should reject upload without auth headers', async () => {
+    const formData = new FormData();
+    formData.append('file', new Blob(['test']));
+    formData.append('dealId', '0x123');
+    formData.append('periodId', 'period1');
+    formData.append('dataType', 'revenue_journal');
+
+    const response = await fetch('http://localhost:3000/api/v1/walrus/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+---
+
+## Frontend Integration
+
+### Dependencies
+
+```bash
+npm install @mysten/sui @mysten/dapp-kit @mysten/seal @mysten/walrus
+```
+
+### Client-Encrypted Mode (Recommended)
+
+**Upload Flow:**
+
+```typescript
+import { SealClient } from '@mysten/seal';
+import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+
+async function uploadEncryptedFile(
+  file: File,
+  dealId: string,
+  periodId: string,
+  dataType: string,
+  userAddress: string
+) {
+  // 1. Read file
+  const arrayBuffer = await file.arrayBuffer();
+  const plaintext = new Uint8Array(arrayBuffer);
+
+  // 2. Encrypt with Seal
+  const sealClient = new SealClient({
+    suiClient,
+    serverConfigs: [
+      { objectId: '0x73d05d62...', weight: 1 },
+      { objectId: '0xf5d14a81...', weight: 1 },
+    ],
+  });
+
+  const { encryptedObject } = await sealClient.encrypt({
+    threshold: 2,
+    packageId: WHITELIST_PACKAGE_ID,
+    id: WHITELIST_OBJECT_ID, // hex string without 0x prefix
+    data: plaintext,
+  });
+
+  // 3. Upload ciphertext to backend
+  const formData = new FormData();
+  formData.append('file', new Blob([encryptedObject]));
+  formData.append('dealId', dealId);
+  formData.append('periodId', periodId);
+  formData.append('dataType', dataType);
+  formData.append('filename', file.name);
+
+  const response = await fetch('/api/v1/walrus/upload?mode=client_encrypted', {
+    method: 'POST',
+    headers: {
+      'X-Sui-Address': userAddress,
+      'X-Sui-Signature': 'placeholder', // TODO: Implement signature
+    },
+    body: formData,
+  });
+
+  const result = await response.json();
+
+  // 4. Sign transaction to register blob on-chain
+  // TODO: Use nextStep.transaction.txBytes to build transaction
+
+  return result;
+}
+```
+
+**Download Flow:**
+
+```typescript
+async function downloadAndDecrypt(
+  blobId: string,
+  dealId: string,
+  userAddress: string,
+  sealClient: SealClient
+) {
+  // 1. Download ciphertext
+  const response = await fetch(
+    `/api/v1/walrus/download/${blobId}?mode=client_encrypted&dealId=${dealId}`,
+    {
+      headers: {
+        'X-Sui-Address': userAddress,
+        'X-Sui-Signature': 'placeholder',
+      },
+    }
+  );
+
+  const ciphertext = new Uint8Array(await response.arrayBuffer());
+
+  // 2. Create Session Key
+  const sessionKey = new SessionKey({
+    address: userAddress,
+    packageId: WHITELIST_PACKAGE_ID,
+    ttlMin: 10,
+  });
+
+  // 3. Sign session key
+  const message = sessionKey.getPersonalMessage();
+  // Sign with wallet...
+
+  // 4. Fetch decryption keys
+  const encryptedKeyId = EncryptedObject.parse(ciphertext).id;
+
+  // Build seal_approve transaction
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${WHITELIST_PACKAGE_ID}::whitelist::seal_approve`,
+    arguments: [
+      tx.pure.vector('u8', Array.from(fromHex(encryptedKeyId))),
+      tx.object(WHITELIST_OBJECT_ID),
+    ],
+  });
+
+  const txBytes = await tx.build({
+    client: suiClient,
+    onlyTransactionKind: true,
+  });
+
+  await sealClient.fetchKeys({
+    ids: [encryptedKeyId],
+    txBytes,
+    sessionKey,
+    threshold: 2,
+  });
+
+  // 5. Decrypt
+  const plaintext = await sealClient.decrypt({
+    data: ciphertext,
+    sessionKey,
+    txBytes,
+  });
+
+  return plaintext;
+}
+```
+
+### Server-Encrypted Mode (Simplified)
+
+```typescript
+// Upload (backend encrypts)
+async function uploadPlaintext(file: File, dealId: string, periodId: string) {
+  const formData = new FormData();
+  formData.append('file', file); // plaintext
+  formData.append('dealId', dealId);
+  formData.append('periodId', periodId);
+  formData.append('dataType', 'revenue_journal');
+
+  const response = await fetch('/api/v1/walrus/upload?mode=server_encrypted', {
+    method: 'POST',
+    headers: {
+      'X-Sui-Address': userAddress,
+      'X-Sui-Signature': 'placeholder',
+    },
+    body: formData,
+  });
+
+  return response.json();
+}
+
+// Download (backend decrypts)
+async function downloadPlaintext(blobId: string, dealId: string) {
+  const response = await fetch(
+    `/api/v1/walrus/download/${blobId}?mode=server_encrypted&dealId=${dealId}`,
+    {
+      headers: {
+        'X-Sui-Address': userAddress,
+        'X-Sui-Signature': 'placeholder',
+      },
+    }
+  );
+
+  return response.blob(); // decrypted plaintext
+}
+```
+
+---
+
+## Known Issues
+
+### Critical Issues
+
+#### 1. WASM File Loading Failure
+
+**Error Message:**
+```
+ENOENT: no such file or directory, open '/ROOT/node_modules/@mysten/walrus-wasm/walrus_wasm_bg.wasm'
+```
+
+**Impact:** All Walrus operations completely non-functional
+
+**Root Cause:** `@mysten/walrus` SDK resolves WASM file path incorrectly in Next.js environment
+
+**Possible Solutions:**
+1. Upgrade `@mysten/walrus` to latest version
+2. Configure Next.js `next.config.js` for WASM handling
+3. Use HTTP to call Walrus aggregator directly (bypass SDK)
+
+---
+
+#### 2. Missing Seal Service Methods
+
+**Problem Description:**
+
+`walrus-controller.ts` calls non-existent methods:
+- Line 140: `sealService.encrypt(fileBuffer, encryptionConfig)`
+- Line 282: `sealService.decrypt(encryptedData, dealId, userAddress)`
+
+But `seal-service.ts` only provides:
+- `encryptWithWhitelist(plaintext, WhitelistEncryptionConfig)`
+- `decryptWithWhitelist(ciphertext, whitelistObjectId, packageId, userAddress)`
+
+**Impact:** `server_encrypted` mode completely non-functional
+
+**Solutions:**
+Option A: Add `encrypt()` and `decrypt()` methods to `seal-service.ts`
+Option B: Update `walrus-controller.ts` to use correct method names and parameters
+
+---
+
+#### 3. Interface Definition Mismatch
+
+**Controller expects:**
+```typescript
+interface SealEncryptionConfig {
+  policyObjectId: string;
+  dealId: string;
+  periodId: string;
+}
+```
+
+**Service provides:**
+```typescript
+interface WhitelistEncryptionConfig {
+  whitelistObjectId: string;
+  packageId: string;
+}
+```
+
+**Impact:** Even if method names are fixed, parameter structures are incompatible
+
+---
+
+### Medium Priority Issues
+
+#### 4. Signature Verification Not Implemented
+
+**Location:** `walrus-controller.ts:342-347`
+
+```typescript
+private async verifySignature(address: string, signature: string): Promise<boolean> {
+  // Placeholder for signature verification
+  return true;
+}
+```
+
+**Risk:** Anyone can spoof `X-Sui-Address` header
+
+---
+
+#### 5. Transaction Bytes Not Generated
+
+**Location:** `walrus-controller.ts:175`
+
+```typescript
+transaction: {
+  txBytes: '', // TODO: Generate actual transaction bytes
+  description: `Register Walrus blob: ${dataType} for ${periodId}`,
+}
+```
+
+**Impact:** Frontend cannot complete on-chain registration step
+
+---
+
+### Low Priority Issues
+
+#### 6. Blob Metadata Storage
+
+Metadata currently only in memory, not persisted. Needs:
+- Database storage, or
+- On-chain storage on Sui
+
+#### 7. Error Message Internationalization
+
+Error messages are currently English only.
+
+---
+
+## Environment Configuration
+
+### Required Configuration
+
+```bash
+# .env.local
+
+# Sui Configuration
+SUI_NETWORK="testnet"
+SUI_RPC_URL="https://fullnode.testnet.sui.io:443"
+SUI_BACKEND_PRIVATE_KEY="base64_encoded_key"  # Required for server_encrypted mode
+
+# Walrus Configuration
+WALRUS_AGGREGATOR_URL="https://aggregator-testnet.walrus.space"
+WALRUS_STORAGE_EPOCHS="1"
+WALRUS_MAX_FILE_SIZE="104857600"  # 100MB
+
+# Seal Configuration
+SEAL_KEY_SERVER_OBJECT_IDS="0x73d05d62...,0xf5d14a81..."
+SEAL_POLICY_OBJECT_ID="0x..."  # Set after deploying Move contract
+
+# Application Configuration
+DEFAULT_UPLOAD_MODE="client_encrypted"
+ENABLE_SERVER_ENCRYPTION="true"
+```
+
+### Test Configuration
+
+```bash
+# Debug mode
+DEBUG_WALRUS="true"
+DEBUG_SEAL="true"
+DEBUG_API="true"
+
+# Test contracts (deployed)
+TEST_PACKAGE_ID="0x8a211625..."
+TEST_WHITELIST_ID="0x572960a3..."
+TEST_CAP_ID="0x299098c9..."
+```
+
+---
+
+## Next Steps
+
+### Immediate Fixes (Blocking Issues)
+
+1. **Resolve WASM Loading Issue**
+   - Check `@mysten/walrus` version
+   - Configure Next.js WASM support
+   - Or switch to HTTP API for aggregator calls
+
+2. **Implement Missing Seal Methods**
+   - Add `encrypt()` / `decrypt()` methods
+   - Or update controller to use existing methods
+
+3. **Unify Interface Definitions**
+   - Decide between `SealEncryptionConfig` or `WhitelistEncryptionConfig`
+   - Update related code
+
+### Follow-up Optimizations
+
+4. Implement signature verification
+5. Generate actual transaction bytes
+6. Add unit and integration tests
+7. Implement metadata persistence
+
+---
+
+## Related Resources
+
+- [Walrus SDK Documentation](https://docs.walrus.site/)
+- [Seal SDK Documentation](https://docs.sui.io/guides/developer/cryptography/seal)
+- [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript)
+- [Project CLAUDE.md](../CLAUDE.md)
+
+---
+
+*Document last updated: 2025-11-19*

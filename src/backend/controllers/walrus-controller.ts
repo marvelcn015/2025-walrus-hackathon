@@ -13,8 +13,8 @@ import type {
   EncryptionMode,
   WalrusUploadResponse,
   BlobMetadata,
-  SealEncryptionConfig,
 } from '@/src/shared/types/walrus';
+import type { WhitelistEncryptionConfig } from '@/src/backend/services/seal-service';
 
 /**
  * Walrus Controller for file operations
@@ -130,14 +130,28 @@ export class WalrusController {
           );
         }
 
-        // Encrypt file using Seal
-        const encryptionConfig: SealEncryptionConfig = {
-          policyObjectId: config.seal.policyObjectId!,
-          dealId,
-          periodId,
+        // Validate required config
+        if (!config.seal.policyObjectId || !config.seal.packageId) {
+          return NextResponse.json(
+            {
+              error: 'ConfigurationError',
+              message: 'Seal configuration is incomplete',
+              statusCode: 500,
+              details: {
+                reason: 'SEAL_POLICY_OBJECT_ID and SEAL_PACKAGE_ID must be set for server-side encryption',
+              },
+            },
+            { status: 500 }
+          );
+        }
+
+        // Encrypt file using Seal with whitelist-based access control
+        const encryptionConfig: WhitelistEncryptionConfig = {
+          whitelistObjectId: config.seal.policyObjectId,
+          packageId: config.seal.packageId,
         };
 
-        const encryptionResult = await sealService.encrypt(fileBuffer, encryptionConfig);
+        const encryptionResult = await sealService.encryptWithWhitelist(fileBuffer, encryptionConfig);
         dataToUpload = encryptionResult.ciphertext;
 
         console.log('Server-side encryption completed');
@@ -240,8 +254,12 @@ export class WalrusController {
       // TODO: Verify signature
       // await this.verifySignature(userAddress, signature);
 
-      // Verify user has access to this blob
-      const accessResult = await sealService.verifyAccess(dealId, userAddress);
+      // Note: dealId is used as whitelistObjectId for access control
+      // In the current design, each deal has an associated whitelist
+      const whitelistObjectId = dealId;
+
+      // Verify user has access to this blob (is on whitelist)
+      const accessResult = await sealService.verifyAccess(whitelistObjectId, userAddress);
 
       if (!accessResult.hasAccess) {
         return NextResponse.json(
@@ -252,7 +270,7 @@ export class WalrusController {
             details: {
               reason: accessResult.reason,
               userAddress,
-              dealId,
+              whitelistObjectId,
             },
           },
           { status: 403 }
@@ -278,8 +296,28 @@ export class WalrusController {
           );
         }
 
-        // Decrypt file using Seal
-        const decryptionResult = await sealService.decrypt(encryptedData, dealId, userAddress);
+        // Validate required config
+        if (!config.seal.packageId) {
+          return NextResponse.json(
+            {
+              error: 'ConfigurationError',
+              message: 'Seal configuration is incomplete',
+              statusCode: 500,
+              details: {
+                reason: 'SEAL_PACKAGE_ID must be set for server-side decryption',
+              },
+            },
+            { status: 500 }
+          );
+        }
+
+        // Decrypt file using Seal with whitelist-based access control
+        const decryptionResult = await sealService.decryptWithWhitelist(
+          encryptedData,
+          whitelistObjectId,
+          config.seal.packageId,
+          userAddress
+        );
         dataToReturn = decryptionResult.plaintext;
 
         console.log('Server-side decryption completed');

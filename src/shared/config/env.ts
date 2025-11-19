@@ -121,9 +121,14 @@ export const sealConfig = {
   keyServerUrl: getEnvVar('SEAL_KEY_SERVER_URL', 'https://seal-keyserver-testnet.sui.io'),
 
   /**
-   * Seal Policy Object ID (deployed earnout_seal_policy contract)
+   * Seal Policy Object ID (Whitelist object ID for access control)
    */
   policyObjectId: getOptionalEnvVar('SEAL_POLICY_OBJECT_ID', ''),
+
+  /**
+   * Package ID where whitelist module is deployed
+   */
+  packageId: getOptionalEnvVar('SEAL_PACKAGE_ID', ''),
 
   /**
    * Seal encryption mode: frontend, backend, or hybrid
