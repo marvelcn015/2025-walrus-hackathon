@@ -264,6 +264,88 @@ describe("Walrus Upload API", () => {
 });
 ```
 
+### SealService Whitelist Tests ✅
+
+A comprehensive test script is available for testing SealService whitelist operations:
+
+**Usage:**
+
+```bash
+npx tsx scripts/test-seal-service.ts
+```
+
+**Environment Variables Required:**
+
+```bash
+SUI_BACKEND_PRIVATE_KEY="base64_encoded_key"
+SEAL_KEY_SERVER_OBJECT_IDS="0x73d05d62...,0xf5d14a81..."
+
+# Optional (for reusing existing whitelist)
+TEST_PACKAGE_ID="0x8a211625..."
+TEST_WHITELIST_ID="0x572960a3..."
+TEST_CAP_ID="0x299098c9..."
+DEBUG_SEAL="true"  # For verbose logging
+```
+
+**Tests Covered:**
+
+| Test | Description | Status |
+|------|-------------|--------|
+| Test 1 | Create Whitelist | ✅ Pass |
+| Test 2 | Add Addresses to Whitelist | ✅ Pass |
+| Test 3 | Verify Access (whitelisted + non-whitelisted) | ✅ Pass |
+| Test 4 | Remove Address from Whitelist | ✅ Pass |
+| Test 5 | Encryption with Whitelist Policy | ✅ Pass |
+| Test 6 | Decryption with Whitelisted Address | ✅ Pass |
+| Test 7 | Decryption Rejection for Non-Whitelisted Address | ✅ Pass |
+
+**What the Test Validates:**
+
+1. **Whitelist Management**: Create whitelist, add/remove addresses, verify access control
+2. **Encryption**: Encrypt data using Seal with whitelist policy
+3. **Decryption**: Decrypt data as whitelisted user
+4. **Access Control**: Verify non-whitelisted addresses cannot decrypt
+
+**Example Output:**
+
+```
+============================================================
+SealService Whitelist Test Script
+============================================================
+
+SealService initialized
+Backend address: 0x1234...
+
+------------------------------------------------------------
+Test 1: Create Whitelist
+------------------------------------------------------------
+Whitelist created successfully!
+  Transaction Digest: 7abc123...
+  Whitelist ID: 0x572960a3...
+  Cap ID: 0x299098c9...
+
+------------------------------------------------------------
+Test 5: Encryption & Decryption
+------------------------------------------------------------
+Encryption successful!
+  Original data: Hello, Seal encryption test!
+  Ciphertext size: 256 bytes
+  Commitment: 0x...
+  Policy Object ID: 0x572960a3...
+
+------------------------------------------------------------
+Test 6: Decryption
+------------------------------------------------------------
+Decryption successful!
+  Decrypted data: Hello, Seal encryption test!
+  Data integrity check: PASSED
+
+============================================================
+Test Summary
+============================================================
+All tests completed successfully!
+```
+
 ---
 
 ## Frontend Integration
@@ -654,7 +736,7 @@ TEST_CAP_ID="0x299098c9..."
 
 4. ~~Implement signature verification~~ ✅ Done
 5. Generate actual transaction bytes
-6. Add unit and integration tests
+6. ~~Add unit and integration tests~~ ✅ Done - SealService whitelist tests passing
 7. ~~Implement metadata persistence~~ ✅ Done (Walrus metadata envelope)
 
 ---

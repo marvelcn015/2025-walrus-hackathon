@@ -34,8 +34,8 @@ const TEST_CONFIG = {
     '0xd7217a1e367cf3e53981ba39f4a25a67f722246fa887861fd8ad78afec33866b', // auditor
   ],
   // Use existing whitelist (skip creation if set)
-  existingWhitelistId: process.env.TEST_WHITELIST_ID || '0x572960a36a9ba724afe86b19c70d8c365ba2f9eb96c6bfc8cf22c6b31ee99382',
-  existingCapId: process.env.TEST_CAP_ID || '0x299098c9286ec9dd7c4e9f23be0db321c90ee656abd5c7ee11b5e9f962f5a141',
+  existingWhitelistId: process.env.TEST_WHITELIST_ID || '',
+  existingCapId: process.env.TEST_CAP_ID || '',
 };
 
 // Helper function to wait for transaction confirmation

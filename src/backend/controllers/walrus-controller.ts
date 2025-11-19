@@ -18,6 +18,7 @@ import type {
   EncryptionMode,
   WalrusUploadResponse,
   BlobMetadata,
+  DataType,
 } from '@/src/shared/types/walrus';
 import type { WhitelistEncryptionConfig } from '@/src/backend/services/seal-service';
 
@@ -188,19 +189,18 @@ export class WalrusController {
       }
 
       // Prepare blob metadata
-      const metadata: BlobMetadata = {
-        filename: filename || file.name,
-        mimeType: file.type || 'application/octet-stream',
-        description: description || undefined,
-        periodId,
-        encrypted: true,
-        encryptionMode: mode,
-        uploadedAt: new Date().toISOString(),
-        uploaderAddress: userAddress,
-        dataType: dataType as any,
-        customDataType: customDataType || undefined,
-      };
-
+          const metadata: BlobMetadata = {
+            filename: filename || file.name,
+            mimeType: file.type || 'application/octet-stream',
+            description: description || undefined,
+            periodId,
+            encrypted: true,
+            encryptionMode: mode,
+            uploadedAt: new Date().toISOString(),
+            uploaderAddress: userAddress,
+            dataType: dataType as DataType,
+            customDataType: customDataType || undefined,
+          };
       // Process based on encryption mode
       let dataToUpload: Buffer;
 
