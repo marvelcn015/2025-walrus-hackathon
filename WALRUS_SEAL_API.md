@@ -11,8 +11,7 @@ This document details the implementation locations, testing methods, frontend in
 3. [API Endpoints](#api-endpoints)
 4. [Backend Testing](#backend-testing)
 5. [Frontend Integration](#frontend-integration)
-6. [Known Issues](#known-issues)
-7. [Environment Configuration](#environment-configuration)
+6. [Environment Configuration](#environment-configuration)
 
 ---
 
@@ -22,10 +21,10 @@ This document details the implementation locations, testing methods, frontend in
 
 The system supports two encryption modes:
 
-| Mode               | Description                                                      | Security                                    | Frontend Complexity |
-| ------------------ | ---------------------------------------------------------------- | ------------------------------------------- | ------------------- |
-| `client_encrypted` | Frontend encrypts during upload, frontend decrypts on download   | High (zero-knowledge, backend never sees plaintext) | High                |
-| `server_encrypted` | Backend encrypts during upload, frontend decrypts on download    | Medium (backend sees plaintext only during upload)  | Medium              |
+| Mode               | Description                                                    | Security                                            | Frontend Complexity |
+| ------------------ | -------------------------------------------------------------- | --------------------------------------------------- | ------------------- |
+| `client_encrypted` | Frontend encrypts during upload, frontend decrypts on download | High (zero-knowledge, backend never sees plaintext) | High                |
+| `server_encrypted` | Backend encrypts during upload, frontend decrypts on download  | Medium (backend sees plaintext only during upload)  | Medium              |
 
 ### Endpoint List
 
@@ -208,7 +207,9 @@ X-Custom-Data-Type: inventory_report (optional, when dataType is "custom")
 
 ## Backend Testing
 
-### Testing with cURL
+The backend can be tested manually using `cURL`, or through automated scripts for services and API endpoints.
+
+### Manual Testing with cURL
 
 **1. Health Check:**
 
@@ -250,33 +251,13 @@ curl "http://localhost:3000/api/v1/walrus/download/{blobId}?dealId=0xdeal123" \
   --output encrypted.bin
 ```
 
-### Testing with Jest/Vitest
+### Automated Test Scripts
 
-```typescript
-// tests/walrus-api.test.ts
-import { describe, it, expect } from "vitest";
+This project includes several scripts in the `/scripts` directory to test backend services and API endpoints.
 
-describe("Walrus Upload API", () => {
-  it("should reject upload without auth headers", async () => {
-    const formData = new FormData();
-    formData.append("file", new Blob(["test"]));
-    formData.append("dealId", "0x123");
-    formData.append("periodId", "period1");
-    formData.append("dataType", "revenue_journal");
+#### 1. WalrusService Test (`scripts/test-walrus-service.ts`) ✅
 
-    const response = await fetch("http://localhost:3000/api/v1/walrus/upload", {
-      method: "POST",
-      body: formData,
-    });
-
-    expect(response.status).toBe(401);
-  });
-});
-```
-
-### WalrusService Tests ✅
-
-A comprehensive test script is available for testing WalrusService storage operations:
+A comprehensive test script for `WalrusService` storage operations.
 
 **Usage:**
 
@@ -290,9 +271,7 @@ npx tsx scripts/test-walrus-service.ts
 WALRUS_AGGREGATOR_URL="https://walrus-testnet.blockscope.net"
 WALRUS_PUBLISHER_URL="https://walrus-testnet.blockscope.net:11444"
 WALRUS_STORAGE_EPOCHS="1"
-
-# Optional for verbose logging
-DEBUG_WALRUS="true"
+DEBUG_WALRUS="true" # Optional for verbose logging
 ```
 
 **Tests Covered:**
@@ -306,74 +285,11 @@ DEBUG_WALRUS="true"
 | Test 6 | Error Handling - Non-existent Blob         | ✅ Pass |
 | Test 7 | Binary Data Upload and Verification        | ✅ Pass |
 
-**Expected Output:**
-
-```
-============================================================
-WalrusService Test Script
-============================================================
-
-WalrusService initialized
-
-------------------------------------------------------------
-Test 1: Upload Small File
-------------------------------------------------------------
-File content: Hello, Walrus! This is a test file.
-Data size: 35 bytes
-Upload successful!
-  Blob ID: ABC123...
-  Commitment: 0x...
-  Size: 35 bytes
-  ...
-
-------------------------------------------------------------
-Test 2: Download and Verify Data
-------------------------------------------------------------
-Download successful!
-  Data integrity check: PASSED
-  Metadata integrity check: PASSED
-  ...
-
-============================================================
-Test Summary
-============================================================
-All tests completed successfully!
-
-Uploaded blobs (for reference):
-  1. ABC123...
-  2. DEF456...
-  3. GHI789...
-```
-
-**Debugging Tips:**
-
-1. **Enable verbose logging:**
-
-   ```bash
-   DEBUG_WALRUS=true npx tsx scripts/test-walrus-service.ts
-   ```
-
-2. **Check Walrus network status:**
-
-   - Visit https://status.walrus-testnet.walrus.space (if available)
-   - Try the aggregator URL directly in browser
-
-3. **Common issues:**
-
-   - `Walrus upload failed: 5XX` - Walrus network may be overloaded, retry later
-   - `Blob not found` - Wait longer for blob propagation (increase sleep time)
-   - `Invalid envelope` - Data format issue, check if uploading raw vs enveloped data
-
-4. **Verify uploaded blob manually:**
-   ```bash
-   curl "https://walrus-testnet.blockscope.net/v1/blobs/{blobId}" --output downloaded.bin
-   ```
-
 ---
 
-### SealService Whitelist Tests ✅
+#### 2. SealService Whitelist Test (`scripts/test-seal-service.ts`) ✅
 
-A comprehensive test script is available for testing SealService whitelist operations:
+A comprehensive test script for `SealService` whitelist operations.
 
 **Usage:**
 
@@ -405,6 +321,101 @@ DEBUG_SEAL="true"  # For verbose logging
 | Test 5 | Encryption with Whitelist Policy                 | ✅ Pass |
 | Test 6 | Decryption with Whitelisted Address              | ✅ Pass |
 | Test 7 | Decryption Rejection for Non-Whitelisted Address | ✅ Pass |
+
+---
+
+#### 3. SuiService Integration Test (`scripts/test-sui-service.ts`) ✅
+
+Tests the `SuiService` methods for querying on-chain Deal blob metadata by performing a complete upload-register-query workflow.
+
+**Usage:**
+
+```bash
+# Mock Walrus mode (no dev server needed - recommended)
+npm run test:sui-service
+# or
+MOCK_WALRUS=true npx tsx scripts/test-sui-service.ts
+
+# Real Walrus mode (requires dev server running)
+MOCK_WALRUS=false npx tsx scripts/test-sui-service.ts
+```
+
+**Test Flow:**
+
+1. **Upload Phase**: Upload 3 test files to Walrus via `WalrusService`:
+
+   - File A → dealId_1, period "2025-Q1", type "revenue_journal"
+   - File B → dealId_1, period "2025-Q2", type "ebitda_report"
+   - File C → dealId_2, period "2025-Q1", type "revenue_journal"
+
+2. **Registration Phase**: Simulate on-chain blob registration:
+
+   - dealId_1 registers [A, B]
+   - dealId_2 registers [C]
+   - dealId_3 has no blobs (empty)
+
+3. **Query Phase**: Test `SuiService` query methods
+
+**Tests Covered:**
+
+| Test                              | Description                        | Expected Result                       |
+| --------------------------------- | ---------------------------------- | ------------------------------------- |
+| `getDealBlobIds(dealId_1)`        | Query blob IDs for deal 1          | Returns [A, B]                        |
+| `getDealBlobIds(dealId_2)`        | Query blob IDs for deal 2          | Returns [C]                           |
+| `getDealBlobIds(dealId_3)`        | Query blob IDs for empty deal      | Returns []                            |
+| `getDealBlobReferences(dealId_1)` | Query full metadata for deal 1     | Returns [A, B] with complete metadata |
+| `getDealBlobReferences(dealId_2)` | Query full metadata for deal 2     | Returns [C] with complete metadata    |
+| `getDealBlobReferences(dealId_3)` | Query full metadata for empty deal | Returns []                            |
+
+**Validation Performed:**
+
+- ✅ Correct blob count for each deal
+- ✅ All expected blob IDs present
+- ✅ Metadata fields (periodId, dataType, uploaderAddress, size, uploadedAt) are valid
+- ✅ Empty deals return empty arrays (not errors)
+
+### Unit Testing with Jest/Vitest
+
+For component-level or service-level unit tests, a testing framework like Vitest or Jest can be used.
+
+```typescript
+// tests/walrus-api.test.ts
+import { describe, it, expect } from "vitest";
+
+describe("Walrus Upload API", () => {
+  it("should reject upload without auth headers", async () => {
+    const formData = new FormData();
+    formData.append("file", new Blob(["test"]));
+    formData.append("dealId", "0x123");
+    formData.append("periodId", "period1");
+    formData.append("dataType", "revenue_journal");
+
+    const response = await fetch("http://localhost:3000/api/v1/walrus/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+### Troubleshooting
+
+**Problem**: "Deal not found" error in `test-sui-service`
+**Solution**: In real mode, verify `TEST_DEAL_ID` points to an actual Deal object on-chain.
+
+**Problem**: "EARNOUT_PACKAGE_ID not configured"
+**Solution**: Set `EARNOUT_PACKAGE_ID` in your `.env` file.
+
+**Problem**: API tests fail with "Server is not available"
+**Solution**:
+
+1.  Start the dev server first: `npm run dev`
+2.  Or use the auto-start feature: `AUTO_START_SERVER=true npm run test:deal-blobs`
+
+**Problem**: Walrus upload fails
+**Solution**: Check that the Walrus publisher is accessible and your `.env` file has the correct `WALRUS_*` URLs.
 
 ---
 
@@ -714,4 +725,4 @@ TEST_CAP_ID="0x299098c9..."
 
 ---
 
-_Document last updated: 2025-11-20_
+_Document last updated: 2025-11-21_

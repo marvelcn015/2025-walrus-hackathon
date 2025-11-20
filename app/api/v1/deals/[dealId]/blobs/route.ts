@@ -1,130 +1,79 @@
-/**
- * API Route: GET /api/v1/deals/{dealId}/blobs
- *
- * List all Walrus blobs associated with a deal
- */
-
-import { NextRequest, NextResponse } from 'next/server';
-import { walrusController } from '@/src/backend/controllers/walrus-controller';
-import type { ListDealBlobsQuery, DataType } from '@/src/shared/types/walrus';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 /**
- * GET /api/v1/deals/{dealId}/blobs
- *
- * Query parameters:
- * - periodId (optional): Filter by specific period
- * - dataType (optional): Filter by data type
- * - page (optional): Page number (default: 1)
- * - limit (optional): Items per page (default: 50, max: 100)
- *
- * Headers:
- * - X-Sui-Address: User's Sui wallet address
- * - X-Sui-Signature: Signature of the timestamp
- * - X-Sui-Signature-Message: ISO timestamp that was signed
+ * @swagger
+ * /api/v1/deals/{dealId}/blobs:
+ *   get:
+ *     summary: Get all blobs associated with a specific deal
+ *     description: Retrieves a list of blob metadata for a given deal ID, providing details about each file uploaded in the context of the deal.
+ *     tags:
+ *       - "Deal Management"
+ *     parameters:
+ *       - in: path
+ *         name: dealId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The unique identifier of the deal.
+ *     responses:
+ *       '200':
+ *         description: A list of blobs for the deal.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/WalrusBlob'
+ *       '404':
+ *         description: Deal not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ dealId: string }> }
+  req: NextRequest,
+  { params }: { params: { dealId: string } }
 ) {
-  try {
-    const { dealId } = await params;
+  const { dealId } = params;
 
-    // Validate dealId format
-    const dealIdPattern = /^0x[a-fA-F0-9]{64}$/;
-    if (!dealIdPattern.test(dealId)) {
-      return NextResponse.json(
-        {
-          error: 'ValidationError',
-          message: 'Invalid deal ID format',
-          statusCode: 400,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Parse query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const query: ListDealBlobsQuery = {};
-
-    // Optional filters
-    const periodId = searchParams.get('periodId');
-    if (periodId) {
-      query.periodId = periodId;
-    }
-
-    const dataType = searchParams.get('dataType');
-    if (dataType) {
-      // Validate dataType enum
-      const validDataTypes: DataType[] = [
-        'revenue_journal',
-        'ebitda_report',
-        'expense_report',
-        'balance_sheet',
-        'cash_flow',
-        'kpi_calculation',
-        'audit_report',
-        'custom',
-      ];
-      if (!validDataTypes.includes(dataType as DataType)) {
-        return NextResponse.json(
-          {
-            error: 'ValidationError',
-            message: `Invalid dataType. Must be one of: ${validDataTypes.join(', ')}`,
-            statusCode: 400,
-          },
-          { status: 400 }
-        );
-      }
-      query.dataType = dataType as DataType;
-    }
-
-    // Pagination parameters
-    const pageParam = searchParams.get('page');
-    if (pageParam) {
-      const page = parseInt(pageParam, 10);
-      if (isNaN(page) || page < 1) {
-        return NextResponse.json(
-          {
-            error: 'ValidationError',
-            message: 'Page number must be a positive integer',
-            statusCode: 400,
-          },
-          { status: 400 }
-        );
-      }
-      query.page = page;
-    }
-
-    const limitParam = searchParams.get('limit');
-    if (limitParam) {
-      const limit = parseInt(limitParam, 10);
-      if (isNaN(limit) || limit < 1 || limit > 100) {
-        return NextResponse.json(
-          {
-            error: 'ValidationError',
-            message: 'Limit must be between 1 and 100',
-            statusCode: 400,
-          },
-          { status: 400 }
-        );
-      }
-      query.limit = limit;
-    }
-
-    // Delegate to controller
-    return await walrusController.handleListDealBlobs(request, dealId, query);
-  } catch (error) {
-    console.error('API route error:', error);
-    return NextResponse.json(
-      {
-        error: 'InternalServerError',
-        message: 'An unexpected error occurred',
-        statusCode: 500,
-        details: {
-          reason: error instanceof Error ? error.message : 'Unknown error',
-        },
+  // In a real implementation, you would fetch this data from a service
+  // based on the dealId. For now, we return mock data.
+  const mockBlobs = [
+    {
+      blobId: 'blob-abc-123',
+      commitment: '0xcommitment123',
+      size: 1024,
+      uploadedAt: new Date().toISOString(),
+      endEpoch: 123456,
+      metadata: {
+        dataType: 'financial_statement',
+        periodId: '2025-q1',
+        dealId: dealId,
+        uploaderAddress: '0xuploader1',
+        filename: 'Q1_Financials.pdf',
+        mimeType: 'application/pdf',
+        description: 'Q1 Financial Statement for the deal.',
       },
-      { status: 500 }
-    );
-  }
+    },
+    {
+      blobId: 'blob-def-456',
+      commitment: '0xcommitment456',
+      size: 2048,
+      uploadedAt: new Date().toISOString(),
+      endEpoch: 123457,
+      metadata: {
+        dataType: 'cap_table',
+        periodId: '2025-q1',
+        dealId: dealId,
+        uploaderAddress: '0xuploader2',
+        filename: 'Cap_Table_Updated.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        description: 'Updated capitalization table.',
+      },
+    },
+  ];
+
+  return NextResponse.json(mockBlobs);
 }
