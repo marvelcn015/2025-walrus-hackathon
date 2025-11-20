@@ -110,35 +110,70 @@ struct KPIResultSubmitted has copy, drop {
 
 ### 2.1 New API Endpoints
 
-#### `GET /api/v1/deals/{dealId}/audit-records`
+#### `GET /api/v1/deals/{dealId}/blobs` ✅ (Implemented)
 
-- **Function**: Get all audit records for a Deal
+- **Function**: Get all Walrus blobs (audit records) for a Deal
+- **Query Parameters**:
+  - `periodId` (optional): Filter by specific period
+  - `dataType` (optional): Filter by data type (revenue_journal, ebitda_report, etc.)
+  - `page` (optional): Page number (default: 1)
+  - `limit` (optional): Items per page (default: 50, max: 100)
+- **Authentication**: Requires Sui wallet signature headers
+  - `X-Sui-Address`: User's Sui wallet address
+  - `X-Sui-Signature`: Base64-encoded signature
+  - `X-Sui-Signature-Message`: ISO timestamp that was signed
+- **Authorization**: Only Deal participants (buyer/seller/auditor) can access
 - **Response**:
 
   ```typescript
   {
-    records: DataAuditRecord[],
-    summary: {
-      total: number,
-      audited: number,
-      pending: number
+    items: [
+      {
+        blobId: string,
+        dataType: "revenue_journal" | "ebitda_report" | ...,
+        periodId: string,
+        uploadedAt: string,
+        uploaderAddress: string,
+        size: number,
+        metadata: {
+          filename: string,
+          mimeType: string,
+          description?: string,
+          encrypted: boolean,
+          encryptionMode: "client_encrypted" | "server_encrypted",
+          dealId: string,
+          periodId: string,
+          dataType: string,
+          uploadedAt: string,
+          uploaderAddress: string
+        },
+        downloadUrl: string  // e.g., "/api/v1/walrus/download/{blobId}?dealId={dealId}"
+      }
+    ],
+    total: number,
+    page: number,
+    limit: number,
+    totalPages: number,
+    sealPolicy?: {
+      packageId: string,
+      whitelistObjectId: string
     }
   }
   ```
 
-#### `GET /api/v1/deals/{dealId}/periods/{periodId}/audit-status`
+- **Usage Example**:
+  ```bash
+  # Get all blobs for a deal
+  GET /api/v1/deals/0x123.../blobs
 
-- **Function**: Get audit progress for a specific Period
-- **Response**:
+  # Filter by period
+  GET /api/v1/deals/0x123.../blobs?periodId=period_2026
 
-  ```typescript
-  {
-    periodId: string,
-    totalBlobs: number,
-    auditedBlobs: number,
-    isReadyForSettlement: boolean,
-    records: DataAuditRecord[]
-  }
+  # Filter by data type
+  GET /api/v1/deals/0x123.../blobs?dataType=revenue_journal
+
+  # Pagination
+  GET /api/v1/deals/0x123.../blobs?page=2&limit=20
   ```
 
 #### `POST /api/v1/nautilus/calculate-kpi`

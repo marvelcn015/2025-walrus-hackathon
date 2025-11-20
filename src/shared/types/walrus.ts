@@ -265,3 +265,60 @@ export interface WalrusDownloadResult {
   /** Metadata extracted from the envelope */
   metadata: BlobMetadata;
 }
+
+/**
+ * Single blob item in deal blobs list
+ */
+export interface DealBlobItem {
+  /** Walrus blob ID */
+  blobId: string;
+  /** Type of data stored */
+  dataType: DataType;
+  /** Period this blob belongs to */
+  periodId: string;
+  /** Upload timestamp */
+  uploadedAt: string;
+  /** Sui address of uploader */
+  uploaderAddress: string;
+  /** File size in bytes */
+  size: number;
+  /** Detailed metadata */
+  metadata: BlobMetadata;
+  /** Relative URL to download this blob */
+  downloadUrl: string;
+}
+
+/**
+ * Response for deal blobs list endpoint
+ */
+export interface DealBlobsListResponse {
+  /** Array of blob items */
+  items: DealBlobItem[];
+  /** Total number of blobs for this deal (after filtering) */
+  total: number;
+  /** Current page number */
+  page: number;
+  /** Number of items per page */
+  limit: number;
+  /** Total number of pages */
+  totalPages: number;
+  /** Seal policy information for decryption */
+  sealPolicy?: {
+    packageId: string;
+    whitelistObjectId: string;
+  };
+}
+
+/**
+ * Query parameters for listing deal blobs
+ */
+export interface ListDealBlobsQuery {
+  /** Filter by specific period (optional) */
+  periodId?: string;
+  /** Filter by data type (optional) */
+  dataType?: DataType;
+  /** Page number for pagination */
+  page?: number;
+  /** Number of items per page */
+  limit?: number;
+}

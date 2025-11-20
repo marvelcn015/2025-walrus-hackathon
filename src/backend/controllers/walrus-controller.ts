@@ -12,6 +12,7 @@ import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { toHex } from '@mysten/sui/utils';
 import { sealService } from '@/src/backend/services/seal-service';
 import { walrusService } from '@/src/backend/services/walrus-service';
+import { suiService } from '@/src/backend/services/sui-service';
 import { config } from '@/src/shared/config/env';
 
 import type {
@@ -19,6 +20,9 @@ import type {
   WalrusUploadResponse,
   BlobMetadata,
   DataType,
+  DealBlobsListResponse,
+  ListDealBlobsQuery,
+  DealBlobItem,
 } from '@/src/shared/types/walrus';
 import type { WhitelistEncryptionConfig } from '@/src/backend/services/seal-service';
 
@@ -490,6 +494,191 @@ export class WalrusController {
         {
           error: 'WalrusDownloadError',
           message: 'Failed to download blob from Walrus network',
+          statusCode: 500,
+          details: {
+            reason: error instanceof Error ? error.message : 'Unknown error',
+          },
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  /**
+   * Handle listing all blobs for a deal
+   *
+   * @param request - NextRequest
+   * @param dealId - Deal ID to query blobs for
+   * @param query - Query parameters (filters, pagination)
+   * @returns List of blobs with metadata
+   */
+  async handleListDealBlobs(
+    request: NextRequest,
+    dealId: string,
+    query: ListDealBlobsQuery
+  ): Promise<NextResponse> {
+    try {
+      // Extract user information from headers
+      const userAddress = request.headers.get('X-Sui-Address');
+      const signature = request.headers.get('X-Sui-Signature');
+      const signedMessage = request.headers.get('X-Sui-Signature-Message');
+
+      if (!userAddress || !signature || !signedMessage) {
+        return NextResponse.json(
+          {
+            error: 'UnauthorizedError',
+            message: 'Missing authentication headers (X-Sui-Address, X-Sui-Signature, X-Sui-Signature-Message)',
+            statusCode: 401,
+          },
+          { status: 401 }
+        );
+      }
+
+      // Verify signature
+      const verificationResult = await this.verifySignature(userAddress, signature, signedMessage);
+      if (!verificationResult.valid) {
+        return NextResponse.json(
+          {
+            error: 'UnauthorizedError',
+            message: verificationResult.error || 'Invalid signature',
+            statusCode: 401,
+          },
+          { status: 401 }
+        );
+      }
+
+      // Verify user is a participant in the deal
+      const isParticipant = await suiService.verifyDealParticipant(dealId, userAddress);
+      if (!isParticipant) {
+        return NextResponse.json(
+          {
+            error: 'ForbiddenError',
+            message: 'User is not authorized to view blobs for this deal',
+            statusCode: 403,
+            details: {
+              reason: 'User is not a participant in this deal',
+              userAddress,
+              dealId,
+            },
+          },
+          { status: 403 }
+        );
+      }
+
+      // Query on-chain blob references
+      const onChainBlobs = await suiService.getDealBlobReferences(dealId);
+
+      if (onChainBlobs.length === 0) {
+        // No blobs registered for this deal
+        return NextResponse.json({
+          items: [],
+          total: 0,
+          page: query.page || 1,
+          limit: query.limit || 50,
+          totalPages: 0,
+          sealPolicy: config.seal.packageId ? {
+            packageId: config.seal.packageId,
+            whitelistObjectId: dealId,
+          } : undefined,
+        } as DealBlobsListResponse, { status: 200 });
+      }
+
+      // Fetch metadata from Walrus for each blob
+      const blobIds = onChainBlobs.map(blob => blob.blobId);
+      const walrusMetadata = await walrusService.listBlobsMetadata(blobIds);
+
+      // Create a map for quick lookup
+      const metadataMap = new Map<string, BlobMetadata>();
+      walrusMetadata.forEach(metadata => {
+        // Use blobId from on-chain data or metadata
+        const blobId = onChainBlobs.find(
+          blob => blob.periodId === metadata.periodId && blob.dataType === metadata.dataType
+        )?.blobId;
+        if (blobId) {
+          metadataMap.set(blobId, metadata);
+        }
+      });
+
+      // Combine on-chain and Walrus data
+      let items: DealBlobItem[] = onChainBlobs.map(onChainBlob => {
+        const metadata = metadataMap.get(onChainBlob.blobId);
+
+        return {
+          blobId: onChainBlob.blobId,
+          dataType: (metadata?.dataType || onChainBlob.dataType) as DataType,
+          periodId: metadata?.periodId || onChainBlob.periodId,
+          uploadedAt: metadata?.uploadedAt || onChainBlob.uploadedAt,
+          uploaderAddress: metadata?.uploaderAddress || onChainBlob.uploaderAddress,
+          size: metadata ? onChainBlob.size : onChainBlob.size,
+          metadata: metadata || {
+            filename: 'unknown',
+            mimeType: 'application/octet-stream',
+            dealId,
+            periodId: onChainBlob.periodId,
+            encrypted: true,
+            encryptionMode: 'client_encrypted' as EncryptionMode,
+            uploadedAt: onChainBlob.uploadedAt,
+            uploaderAddress: onChainBlob.uploaderAddress,
+            dataType: onChainBlob.dataType as DataType,
+          },
+          downloadUrl: `/api/v1/walrus/download/${onChainBlob.blobId}?dealId=${dealId}`,
+        };
+      });
+
+      // Apply filters
+      if (query.periodId) {
+        items = items.filter(item => item.periodId === query.periodId);
+      }
+      if (query.dataType) {
+        items = items.filter(item => item.dataType === query.dataType);
+      }
+
+      // Calculate pagination
+      const page = query.page || 1;
+      const limit = Math.min(query.limit || 50, 100); // Max 100 items per page
+      const total = items.length;
+      const totalPages = Math.ceil(total / limit);
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+
+      // Apply pagination
+      const paginatedItems = items.slice(startIndex, endIndex);
+
+      const response: DealBlobsListResponse = {
+        items: paginatedItems,
+        total,
+        page,
+        limit,
+        totalPages,
+        sealPolicy: config.seal.packageId ? {
+          packageId: config.seal.packageId,
+          whitelistObjectId: dealId,
+        } : undefined,
+      };
+
+      return NextResponse.json(response, { status: 200 });
+    } catch (error) {
+      console.error('List deal blobs failed:', error);
+
+      // Check if it's a not found error
+      if (error instanceof Error && error.message.includes('not found')) {
+        return NextResponse.json(
+          {
+            error: 'NotFoundError',
+            message: 'Deal not found',
+            statusCode: 404,
+            details: {
+              dealId,
+            },
+          },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: 'ServerError',
+          message: 'Failed to retrieve blob list',
           statusCode: 500,
           details: {
             reason: error instanceof Error ? error.message : 'Unknown error',

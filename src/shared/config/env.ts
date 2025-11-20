@@ -186,6 +186,11 @@ export const debugConfig = {
   seal: parseBooleanEnv('DEBUG_SEAL', false),
 
   /**
+   * Enable debug logging for Sui blockchain operations
+   */
+  sui: parseBooleanEnv('DEBUG_SUI', false),
+
+  /**
    * Enable verbose API logging
    */
   api: parseBooleanEnv('DEBUG_API', false),

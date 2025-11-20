@@ -355,6 +355,31 @@ export class WalrusService {
       metadata: envelope.metadata,
     };
   }
+
+  /**
+   * List all blobs for a deal by fetching metadata from each blob
+   *
+   * Note: This is a simplified implementation that assumes blob IDs are tracked elsewhere.
+   * In production, blob IDs should be queried from on-chain Deal object.
+   *
+   * @param blobIds - Array of blob IDs to fetch metadata for
+   * @returns Array of blob metadata
+   */
+  async listBlobsMetadata(blobIds: string[]): Promise<BlobMetadata[]> {
+    const metadataList: BlobMetadata[] = [];
+
+    for (const blobId of blobIds) {
+      try {
+        const result = await this.download(blobId);
+        metadataList.push(result.metadata);
+      } catch (error) {
+        console.error(`Failed to fetch metadata for blob ${blobId}:`, error);
+        // Continue with other blobs even if one fails
+      }
+    }
+
+    return metadataList;
+  }
 }
 
 /**
