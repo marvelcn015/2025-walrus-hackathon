@@ -116,7 +116,7 @@ export class SuiService {
   async getDealBlobReferences(dealId: string): Promise<OnChainBlobReference[]> {
     try {
       if (debugConfig.sui) {
-        console.log('Querying blob references for deal:', dealId);
+        console.log('Querying all blob references for deal:', dealId);
       }
 
       // Check if earnout package is configured
@@ -146,15 +146,6 @@ export class SuiService {
       const fields = content.fields as Record<string, unknown>;
 
       // Extract blob references from walrus_blobs field
-      // Expected structure based on Move module:
-      // struct BlobReference {
-      //   blob_id: String,
-      //   period_id: String,
-      //   data_type: String,
-      //   size: u64,
-      //   uploaded_at: u64,
-      //   uploader: address
-      // }
       const walrusBlobs = fields.walrus_blobs as Array<{
         blob_id?: string;
         blobId?: string;

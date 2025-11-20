@@ -113,11 +113,6 @@ struct KPIResultSubmitted has copy, drop {
 #### `GET /api/v1/deals/{dealId}/blobs` ✅ (Implemented)
 
 - **Function**: Get all Walrus blobs (audit records) for a Deal
-- **Query Parameters**:
-  - `periodId` (optional): Filter by specific period
-  - `dataType` (optional): Filter by data type (revenue_journal, ebitda_report, etc.)
-  - `page` (optional): Page number (default: 1)
-  - `limit` (optional): Items per page (default: 50, max: 100)
 - **Authentication**: Requires Sui wallet signature headers
   - `X-Sui-Address`: User's Sui wallet address
   - `X-Sui-Signature`: Base64-encoded signature
@@ -126,54 +121,29 @@ struct KPIResultSubmitted has copy, drop {
 - **Response**:
 
   ```typescript
-  {
-    items: [
-      {
-        blobId: string,
-        dataType: "revenue_journal" | "ebitda_report" | ...,
-        periodId: string,
-        uploadedAt: string,
-        uploaderAddress: string,
-        size: number,
-        metadata: {
-          filename: string,
-          mimeType: string,
-          description?: string,
-          encrypted: boolean,
-          encryptionMode: "client_encrypted" | "server_encrypted",
-          dealId: string,
-          periodId: string,
-          dataType: string,
-          uploadedAt: string,
-          uploaderAddress: string
-        },
-        downloadUrl: string  // e.g., "/api/v1/walrus/download/{blobId}?dealId={dealId}"
-      }
-    ],
-    total: number,
-    page: number,
-    limit: number,
-    totalPages: number,
-    sealPolicy?: {
-      packageId: string,
-      whitelistObjectId: string
+  [
+    {
+      "blobId": "string",
+      "dataType": "revenue_journal" | "ebitda_report" | "...",
+      "periodId": "string",
+      "uploadedAt": "string",
+      "uploaderAddress": "string",
+      "size": "number",
+      "metadata": {
+        "filename": "string",
+        "mimeType": "string",
+        "description": "string",
+        "encrypted": "boolean",
+        "encryptionMode": "client_encrypted" | "server_encrypted",
+        "dealId": "string",
+        "periodId": "string",
+        "dataType": "string",
+        "uploadedAt": "string",
+        "uploaderAddress": "string"
+      },
+      "downloadUrl": "string"
     }
-  }
-  ```
-
-- **Usage Example**:
-  ```bash
-  # Get all blobs for a deal
-  GET /api/v1/deals/0x123.../blobs
-
-  # Filter by period
-  GET /api/v1/deals/0x123.../blobs?periodId=period_2026
-
-  # Filter by data type
-  GET /api/v1/deals/0x123.../blobs?dataType=revenue_journal
-
-  # Pagination
-  GET /api/v1/deals/0x123.../blobs?page=2&limit=20
+  ]
   ```
 
 #### `POST /api/v1/nautilus/calculate-kpi`
@@ -380,6 +350,90 @@ public fun verify_nautilus_attestation(
 18. [ ] Update `settle` function verification logic
 19. [ ] Update `SettlementPanel` component
 20. [ ] End-to-end testing
+
+---
+
+## 5.1 Detailed Development Plan
+
+This plan outlines the concrete steps to implement the complete auditor workflow, building upon the existing `GET /api/v1/deals/{dealId}/blobs` API.
+
+### **Phase 1: Smart Contract Foundation (Sui Move)**
+
+This is the most critical foundation. The frontend's signing operation ultimately needs to call the contract to change the state.
+
+- **Task 1.1: Implement `audit_data` function**
+
+  - **File**: `src/backend/contracts/sources/earnout.move`
+  - **Goal**: Create a public function that accepts `blobId` (or the corresponding `DataAuditRecord` object), `signature`, and `message`.
+  - **Core Logic**:
+    1.  Verify the caller is the designated `auditor`.
+    2.  Reconstruct the expected `message` within the contract.
+    3.  Use `sui::ed25519::ed25519_verify` to validate the signature.
+    4.  If verification passes, set the `audited` field of the corresponding `DataAuditRecord` object to `true`, and record the `auditor`'s address and timestamp.
+    5.  Emit a `DataAudited` event for the frontend to listen to.
+
+- **Task 1.2: Implement `check_period_audit_status` function**
+
+  - **File**: `src/backend/contracts/sources/earnout.move`
+  - **Goal**: Create a view function to check the audit progress of a specific `period`.
+  - **Core Logic**:
+    1.  Accept `dealId` and `periodId` as parameters.
+    2.  Query all `DataAuditRecord` objects under that `period`.
+    3.  Calculate the total count (`total_count`) and audited count (`audited_count`).
+    4.  Return `(total_count, audited_count, total_count == audited_count)`, where the third value is `is_ready`.
+
+- **Task 1.3: Write Contract Unit Tests**
+  - **Goal**: Ensure the security and correctness of the contract logic.
+  - **Test Cases**:
+    - **Success Case**: A legitimate Auditor with a correct signature can successfully audit.
+    - **Failure Cases**:
+      - A non-Auditor (e.g., Buyer, Seller) calling `audit_data` should fail.
+      - Calling with an incorrect signature or message should fail.
+      - Re-auditing an already audited item should fail or produce no change.
+    - **State Check**: Verify that `check_period_audit_status` returns the correct counts and `is_ready` status at different stages of auditing.
+
+### **Phase 2: Frontend Implementation (Next.js / React)**
+
+Connect the current mocked frontend page to real wallet interactions and contract calls.
+
+- **Task 2.1: Create Auditor Review Page**
+
+  - **File**: `app/deals/[dealId]/periods/[periodId]/review/page.tsx`
+  - **Goal**: Create a page where the Auditor can see the items to be audited.
+  - **Core Logic**:
+    1.  Use the `GET /api/v1/deals/{dealId}/blobs` API to fetch the list of all blobs for the `period`.
+    2.  Render the list, including filename, uploader, current status (Audited/Pending), and an "**Audit & Sign**" button.
+
+- **Task 2.2: Implement the "Audit & Sign" Button Functionality**
+  - **File**: Can be in `review/page.tsx` or a separate component like `src/frontend/components/auditor/AuditButton.tsx`.
+  - **Goal**: Handle the entire process from signing to on-chain transaction.
+  - **Core Logic**:
+    1.  **Construct Message**: When the user clicks the button, construct the message to be signed based on the `blobId` (e.g., `new TextEncoder().encode(\`AUDIT:\${blobId}\`)`).
+    2.  **Call Wallet for Signature**: Use the Sui Dapp Kit's `useSignPersonalMessage` hook to pop up the wallet window for the user to sign the message.
+    3.  **Construct Transaction**: After obtaining the signature, construct a `Transaction` to call the contract's `audit_data` function.
+    4.  **Send Transaction**: Use the `useSignAndExecuteTransaction` hook to send this transaction on-chain.
+    5.  **Update UI**: Based on the transaction result, display a success or failure notification (e.g., using `sonner`) and refresh the data list to update the item's status.
+
+### **Phase 3: Backend & Integration**
+
+Ensure that after the audit is complete, the subsequent process can be triggered.
+
+- **Task 3.1: Frontend State Check**
+
+  - **Location**: On the page or component where the next step (e.g., KPI calculation) needs to be triggered.
+  - **Goal**: Determine the UI behavior based on the audit status.
+  - **Core Logic**:
+    1.  Call the contract's `check_period_audit_status` view function.
+    2.  Based on the returned `is_ready` status, decide whether to enable the "Calculate KPI" or "Proceed to Settlement" button.
+
+- **Task 3.2: End-to-End Manual Testing**
+  - **Goal**: Walk through the entire process once to ensure all parts work together correctly.
+  - **Test Flow**:
+    1.  **Buyer**: Upload a file.
+    2.  **Auditor**: Log in, go to the review page, and see the file.
+    3.  **Auditor**: Click "Audit & Sign" and confirm in the wallet.
+    4.  **Auditor**: Confirm the file's status on the page changes to "Audited".
+    5.  **System/Buyer**: Check the settlement page; the "Calculate KPI" button should now be clickable.
 
 ---
 

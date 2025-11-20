@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { walrusController } from '@/src/backend/controllers/walrus-controller';
+import { walrusController } from '@/src/backend/controllers/controller';
 import { config } from '@/src/shared/config/env';
 import type { EncryptionMode } from '@/src/shared/types/walrus';
 

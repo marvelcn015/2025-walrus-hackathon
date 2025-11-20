@@ -1,79 +1,47 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { suiService } from '@/src/backend/services/sui-service';
+import { walrusService } from '@/src/backend/services/walrus-service';
+import { config } from '@/src/shared/config/env';
+import type { BlobReference, DataType } from '@/src/shared/types/walrus';
 
 /**
- * @swagger
- * /api/v1/deals/{dealId}/blobs:
- *   get:
- *     summary: Get all blobs associated with a specific deal
- *     description: Retrieves a list of blob metadata for a given deal ID, providing details about each file uploaded in the context of the deal.
- *     tags:
- *       - "Deal Management"
- *     parameters:
- *       - in: path
- *         name: dealId
- *         required: true
- *         schema:
- *           type: string
- *         description: The unique identifier of the deal.
- *     responses:
- *       '200':
- *         description: A list of blobs for the deal.
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/WalrusBlob'
- *       '404':
- *         description: Deal not found.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ * GET /api/v1/deals/{dealId}/blobs
+ *
+ * Get all Walrus blob references for a specific deal.
  */
 export async function GET(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: { dealId: string } }
 ) {
   const { dealId } = params;
 
-  // In a real implementation, you would fetch this data from a service
-  // based on the dealId. For now, we return mock data.
-  const mockBlobs = [
-    {
-      blobId: 'blob-abc-123',
-      commitment: '0xcommitment123',
-      size: 1024,
-      uploadedAt: new Date().toISOString(),
-      endEpoch: 123456,
-      metadata: {
-        dataType: 'financial_statement',
-        periodId: '2025-q1',
-        dealId: dealId,
-        uploaderAddress: '0xuploader1',
-        filename: 'Q1_Financials.pdf',
-        mimeType: 'application/pdf',
-        description: 'Q1 Financial Statement for the deal.',
-      },
-    },
-    {
-      blobId: 'blob-def-456',
-      commitment: '0xcommitment456',
-      size: 2048,
-      uploadedAt: new Date().toISOString(),
-      endEpoch: 123457,
-      metadata: {
-        dataType: 'cap_table',
-        periodId: '2025-q1',
-        dealId: dealId,
-        uploaderAddress: '0xuploader2',
-        filename: 'Cap_Table_Updated.xlsx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        description: 'Updated capitalization table.',
-      },
-    },
-  ];
+  try {
+    // Get all on-chain blob references
+    const onChainBlobRefs = await suiService.getDealBlobReferences(dealId);
 
-  return NextResponse.json(mockBlobs);
+    // Augment with Walrus metadata (like filename, description)
+    const fullBlobRefs: BlobReference[] = await Promise.all(
+      onChainBlobRefs.map(async (ref) => {
+        // Use download to get the metadata envelope
+        const { metadata: walrusMetadata } = await walrusService.download(ref.blobId);
+        
+        return {
+          blobId: ref.blobId,
+          dataType: ref.dataType as DataType, // Assert type to fix mismatch
+          uploadedAt: ref.uploadedAt,
+          uploaderAddress: ref.uploaderAddress,
+          size: ref.size,
+          metadata: walrusMetadata,
+          // downloadUrl is not part of BlobReference, so we omit it here
+        };
+      })
+    );
+
+    // The simplified API now returns just the array of blob references.
+    // The sealPolicy can be fetched separately if needed by the client.
+    return NextResponse.json(fullBlobRefs);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
 }
