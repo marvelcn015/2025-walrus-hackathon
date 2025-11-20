@@ -352,22 +352,36 @@ public fun verify_nautilus_attestation(
   - `auditStatus.auditRecordId` - Sui object ID of audit record
 - Backend queries audit records via Sui events (DataAuditRecordCreated)
 
-### Phase 3: Frontend Audit Features
+### Phase 3: Frontend Audit Features ✅ COMPLETED
 
-9. [ ] Build `DataAuditPage` page
-10. [ ] Implement `AuditDataButton` signature flow
-11. [ ] Implement `useAuditRecords` hook
-12. [ ] Update Dashboard to show audit progress
+9. [x] Build `DataAuditPage` page
+10. [x] Implement `AuditDataButton` signature flow
+11. [x] Implement `useAuditRecords` hook
+12. [x] Update Dashboard to show audit progress
 
-### Phase 4: Nautilus Integration ✅ COMPLETED (Backend/Contract)
+**Implementation Notes:**
+
+- Created `useAuditRecords` hook for fetching audit records and calculating progress
+- Created `useAuditData` hook for handling audit signature flow with Sui wallet
+- Created new page: `app/deals/[dealId]/periods/[periodId]/audit/page.tsx`
+  - Displays all blobs for a period with audit status
+  - Shows audit progress bar
+  - "Audit & Sign" button for each unaudited blob
+  - Real-time updates after auditing
+- Created `AuditProgressBadge` component showing audit completion percentage
+- Integrated `AuditProgressBadge` into `PeriodCard` component on Dashboard
+- All components use @mysten/dapp-kit for wallet integration
+
+### Phase 4: Nautilus Integration ✅ COMPLETED
 
 13. [x] Design Nautilus enclave calculation logic (mock implementation)
 14. [x] Implement attestation generation (mock attestation)
 15. [x] Add attestation verification to contract
 16. [x] Add Nautilus API to backend
-17. [ ] Frontend integration for KPI calculation trigger
+17. [x] Frontend integration for KPI calculation trigger
 
 **Implementation Notes:**
+
 - Smart contract functions implemented:
   - `verify_nautilus_attestation()` - Basic attestation validation (production TODO: full TEE verification)
   - `submit_kpi_result()` - Submit KPI result with attestation, requires all period data to be audited
@@ -380,15 +394,20 @@ public fun verify_nautilus_attestation(
   - Added `kpi_result: Option<KPIResult>` to Period struct
   - Added `KPIResultSubmitted` event
   - Error codes: EPeriodNotFullyAudited, EInvalidAttestation, EKPIResultAlreadySubmitted, EPeriodNotFound
+- Frontend implementation:
+  - Created `useNautilusKPI` hook for KPI calculation and submission
+  - Hook handles API calls to `/api/v1/nautilus/calculate-kpi` and transaction signing
+  - Integrated into `SettlementPanel` component
 - Mock implementation returns placeholder attestation (production needs real Nautilus TEE integration)
 
-### Phase 5: Settlement Flow Update ⚙️ IN PROGRESS (Contract Completed)
+### Phase 5: Settlement Flow Update ✅ COMPLETED
 
 18. [x] Update `settle` function verification logic
-19. [ ] Update `SettlementPanel` component
+19. [x] Update `SettlementPanel` component
 20. [ ] End-to-end testing
 
 **Implementation Notes:**
+
 - Smart contract `settle()` function implemented with comprehensive verification:
   - Verifies caller is the buyer
   - Checks period is not already settled
@@ -396,8 +415,17 @@ public fun verify_nautilus_attestation(
   - Requires valid KPI result with attestation to be submitted
   - Marks period as settled on-chain
 - Error codes: EAlreadySettled, ENoKPIResult
+- Frontend `SettlementPanel` component implemented:
+  - Location: `src/frontend/components/settlement/SettlementPanel.tsx`
+  - Displays audit progress with progress bar
+  - Shows KPI calculation trigger (buyer only)
+  - Displays KPI result with attestation details
+  - Submit KPI result on-chain button
+  - Conditional rendering based on role and audit completion
+  - Integrated `useAuditRecords` and `useNautilusKPI` hooks
 - TODO: Implement token transfer logic for actual earn-out payment
 - TODO: Add PeriodSettled event emission
+- TODO: End-to-end testing with deployed contracts
 
 ---
 

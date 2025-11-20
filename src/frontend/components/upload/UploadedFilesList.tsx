@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Trash2, Download } from 'lucide-react';
+import { FileText, Trash2, Download, Loader2 } from 'lucide-react';
+import { decryptData } from '@/src/frontend/lib/seal';
 
 interface UploadedFile {
   filename: string;
@@ -16,14 +18,54 @@ interface UploadedFile {
 interface UploadedFilesListProps {
   files: UploadedFile[];
   onDelete?: (index: number) => void;
-  onDownload?: (index: number) => void;
 }
+
+type DownloadStatus = 'idle' | 'downloading' | 'error';
 
 export function UploadedFilesList({
   files,
   onDelete,
-  onDownload,
 }: UploadedFilesListProps) {
+  const [downloadStatus, setDownloadStatus] = useState<Record<number, DownloadStatus>>({});
+  const [downloadError, setDownloadError] = useState<Record<number, string | null>>({});
+
+  const handleDownload = async (index: number, blobId: string, filename: string) => {
+    setDownloadStatus(prev => ({ ...prev, [index]: 'downloading' }));
+    setDownloadError(prev => ({ ...prev, [index]: null }));
+
+    try {
+      const response = await fetch(`/api/v1/walrus/download/${blobId}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to download file');
+      }
+
+      const encryptedBuffer = await response.arrayBuffer();
+      const decryptedBuffer = await decryptData(encryptedBuffer);
+
+      const decryptedBlob = new Blob([decryptedBuffer]);
+      const url = URL.createObjectURL(decryptedBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      setDownloadStatus(prev => ({ ...prev, [index]: 'idle' }));
+    } catch (e: any) {
+      console.error('Download failed:', e);
+      setDownloadStatus(prev => ({ ...prev, [index]: 'error' }));
+      setDownloadError(prev => ({ ...prev, [index]: e.message || 'An unexpected error occurred.' }));
+      // Reset error after a few seconds
+      setTimeout(() => {
+        setDownloadStatus(prev => ({ ...prev, [index]: 'idle' }));
+        setDownloadError(prev => ({ ...prev, [index]: null }));
+      }, 5000);
+    }
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -110,17 +152,27 @@ export function UploadedFilesList({
                         {file.description}
                       </p>
                     )}
+                    {downloadError[index] && (
+                      <p className="text-xs text-destructive mt-1">
+                        Error: {downloadError[index]}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1">
-                    {onDownload && (
+                    {file.blobId && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onDownload(index)}
+                        onClick={() => handleDownload(index, file.blobId!, file.filename)}
+                        disabled={downloadStatus[index] === 'downloading'}
                         className="h-8 w-8 p-0"
                       >
-                        <Download className="h-3 w-3" />
+                        {downloadStatus[index] === 'downloading' ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Download className="h-3 w-3" />
+                        )}
                       </Button>
                     )}
                     {onDelete && (

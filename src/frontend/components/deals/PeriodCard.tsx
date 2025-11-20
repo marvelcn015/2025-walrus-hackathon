@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { PeriodSummary } from '@/src/frontend/lib/api-client';
+import { AuditProgressBadge } from '@/src/frontend/components/audit/AuditProgressBadge';
 
 interface PeriodCardProps {
   period: PeriodSummary;
@@ -138,6 +139,7 @@ export function PeriodCard({ period, dealId, userRole }: PeriodCardProps) {
               <Badge variant={getSettlementStatusColor(period.settlementStatus)}>
                 {getSettlementStatusLabel(period.settlementStatus)}
               </Badge>
+              <AuditProgressBadge dealId={dealId} periodId={period.periodId} />
             </div>
           </div>
           {period.settlementStatus === 'settled' && (
