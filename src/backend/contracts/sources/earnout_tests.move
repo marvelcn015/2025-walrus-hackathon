@@ -12,6 +12,9 @@ module contracts::earnout_tests {
     const AUDITOR: address = @0xA;
     const RANDOM: address = @0xF;
 
+    // Test start date (2025-11-03 00:00:00 UTC in milliseconds)
+    const TEST_START_DATE: u64 = 1730592000000;
+
     // Helper function to create a test deal
     fun create_test_deal(scenario: &mut Scenario): ID {
         next_tx(scenario, BUYER);
@@ -20,6 +23,7 @@ module contracts::earnout_tests {
                 string::utf8(b"Test Deal"),
                 SELLER,
                 AUDITOR,
+                TEST_START_DATE,
                 ctx(scenario)
             );
         };

@@ -22,6 +22,7 @@ interface CreateDealOptions {
   name: string;
   sellerAddress: string;
   auditorAddress: string;
+  startDate: string;  // ISO date string (YYYY-MM-DD)
   onSuccess?: (dealId: string) => void;
   onError?: (error: Error) => void;
 }
@@ -42,7 +43,7 @@ export function useCreateDeal(): UseCreateDealReturn {
 
   const createDeal = useCallback(
     async (options: CreateDealOptions) => {
-      const { name, sellerAddress, auditorAddress, onSuccess, onError } = options;
+      const { name, sellerAddress, auditorAddress, startDate, onSuccess, onError } = options;
 
       if (!currentAccount?.address) {
         const err = new Error('Wallet not connected');
@@ -81,6 +82,7 @@ export function useCreateDeal(): UseCreateDealReturn {
             name,
             sellerAddress,
             auditorAddress,
+            startDate,
             buyerAddress: currentAccount.address,
           }),
         });

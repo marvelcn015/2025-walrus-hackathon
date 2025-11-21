@@ -449,6 +449,7 @@ export class SuiService {
     name: string,
     sellerAddress: string,
     auditorAddress: string,
+    startDateMs: number,
     buyerAddress: string
   ): Promise<{ txBytes: string; estimatedGas: number }> {
     try {
@@ -463,6 +464,7 @@ export class SuiService {
         console.log('Buyer:', buyerAddress);
         console.log('Seller:', sellerAddress);
         console.log('Auditor:', auditorAddress);
+        console.log('Start Date (ms):', startDateMs);
       }
 
       const tx = new Transaction();
@@ -473,6 +475,7 @@ export class SuiService {
       //   name: String,
       //   seller: address,
       //   auditor: address,
+      //   start_date: u64,
       //   ctx: &mut TxContext
       // )
       tx.moveCall({
@@ -481,6 +484,7 @@ export class SuiService {
           tx.pure.string(name),
           tx.pure.address(sellerAddress),
           tx.pure.address(auditorAddress),
+          tx.pure.u64(startDateMs),
         ],
       });
 
@@ -522,6 +526,7 @@ export class SuiService {
     buyer: string;
     seller: string;
     auditor: string;
+    startDate: number; // Unix timestamp in milliseconds
     parametersLocked: boolean;
     whitelistId: string;
     periods: unknown[];
@@ -556,6 +561,7 @@ export class SuiService {
         buyer: fields.buyer as string || '',
         seller: fields.seller as string || '',
         auditor: fields.auditor as string || '',
+        startDate: Number(fields.start_date) || 0,
         parametersLocked: fields.parameters_locked as boolean || false,
         whitelistId: (fields.whitelist_id as string) || '',
         periods: (fields.periods as unknown[]) || [],

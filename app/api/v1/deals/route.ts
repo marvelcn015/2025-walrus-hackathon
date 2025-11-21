@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { name, sellerAddress, auditorAddress, buyerAddress } = body;
+    const { name, sellerAddress, auditorAddress, startDate, buyerAddress } = body;
 
     // Validate required fields
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -152,6 +152,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate startDate (required, format: YYYY-MM-DD)
+    if (!startDate || typeof startDate !== 'string') {
+      return NextResponse.json(
+        {
+          error: 'ValidationError',
+          message: 'Start date is required (format: YYYY-MM-DD)',
+          statusCode: 400,
+        },
+        { status: 400 }
+      );
+    }
+
+    const startDateParsed = Date.parse(startDate);
+    if (isNaN(startDateParsed)) {
+      return NextResponse.json(
+        {
+          error: 'ValidationError',
+          message: 'Invalid start date format (expected: YYYY-MM-DD)',
+          statusCode: 400,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Convert to Unix timestamp in milliseconds
+    const startDateMs = startDateParsed;
+
     // Buyer address should match the authenticated user
     const effectiveBuyerAddress = buyerAddress || userAddress;
     if (effectiveBuyerAddress !== userAddress) {
@@ -170,6 +197,7 @@ export async function POST(request: NextRequest) {
       name.trim(),
       sellerAddress,
       auditorAddress,
+      startDateMs,
       effectiveBuyerAddress
     );
 

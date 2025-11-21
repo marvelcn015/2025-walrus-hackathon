@@ -24,6 +24,7 @@ const createDealSchema = z.object({
   dealName: z.string().min(1, 'Deal name is required'),
   buyerName: z.string().min(1, 'Buyer name is required'),
   sellerName: z.string().min(1, 'Seller name is required'),
+  startDate: z.string().min(1, 'Start date is required'),
 
   // Blockchain Addresses
   acquirerAddress: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid Sui address format'),
@@ -63,6 +64,7 @@ export default function CreateDealPage() {
     defaultValues: {
       earnoutPeriodYears: 3,
       headquarterExpenseAllocationPercentage: 0.1,
+      startDate: '2025-11-03',
       assets: [{ assetID: '', originalCost: 0, estimatedUsefulLife_months: 120 }],
     },
   });
@@ -139,6 +141,7 @@ export default function CreateDealPage() {
       name: data.dealName,
       sellerAddress: data.acquireeAddress,
       auditorAddress: data.auditorAddress,
+      startDate: data.startDate,
       onSuccess: (txDigest) => {
         console.log('Deal created with transaction:', txDigest);
         console.log('MA Agreement file to upload:', uploadedFile);
@@ -218,6 +221,21 @@ export default function CreateDealPage() {
                   <p className="text-sm text-destructive mt-1">{errors.sellerName.message}</p>
                 )}
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                type="date"
+                {...register('startDate')}
+              />
+              {errors.startDate && (
+                <p className="text-sm text-destructive mt-1">{errors.startDate.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                The date when the earn-out period begins
+              </p>
             </div>
           </CardContent>
         </Card>

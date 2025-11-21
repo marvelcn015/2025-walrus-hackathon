@@ -32,6 +32,7 @@ module contracts::earnout {
         buyer: address,
         seller: address,
         auditor: address,
+        start_date: u64,  // Unix timestamp (milliseconds) when earn-out period begins
         periods: vector<Period>,
         parameters_locked: bool,
         whitelist_id: ID,
@@ -84,7 +85,7 @@ module contracts::earnout {
 
     // --- Events ---
 
-    public struct DealCreated has copy, drop { deal_id: ID, whitelist_id: ID, buyer: address }
+    public struct DealCreated has copy, drop { deal_id: ID, whitelist_id: ID, buyer: address, start_date: u64 }
     public struct ParametersLocked has copy, drop { deal_id: ID }
     public struct BlobAdded has copy, drop { deal_id: ID, period_id: String, blob_id: String }
     
@@ -136,6 +137,7 @@ module contracts::earnout {
         name: String,
         seller: address,
         auditor: address,
+        start_date: u64,
         ctx: &mut TxContext
     ) {
         let buyer = tx_context::sender(ctx);
@@ -159,16 +161,18 @@ module contracts::earnout {
             buyer,
             seller,
             auditor,
+            start_date,
             periods: vector::empty(),
             parameters_locked: false,
             whitelist_id: wl_id,
             whitelist_cap: wl_cap,
         };
-        
-        event::emit(DealCreated { 
-            deal_id: object::id(&deal), 
+
+        event::emit(DealCreated {
+            deal_id: object::id(&deal),
             whitelist_id: wl_id,
-            buyer 
+            buyer,
+            start_date,
         });
 
         transfer::share_object(deal);
@@ -587,6 +591,12 @@ module contracts::earnout {
 
     public fun kpi_result_computed_at(result: &KPIResult): u64 {
         result.computed_at
+    }
+
+    // --- Accessor Functions for Deal ---
+
+    public fun deal_start_date(deal: &Deal): u64 {
+        deal.start_date
     }
 
 }
