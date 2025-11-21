@@ -126,11 +126,6 @@ export const sealConfig = {
   policyObjectId: getOptionalEnvVar('SEAL_POLICY_OBJECT_ID', ''),
 
   /**
-   * Package ID where whitelist module is deployed
-   */
-  packageId: getOptionalEnvVar('SEAL_PACKAGE_ID', ''),
-
-  /**
    * Seal encryption mode: frontend, backend, or hybrid
    */
   encryptionMode: getOptionalEnvVar('SEAL_ENCRYPTION_MODE', 'hybrid') as 'frontend' | 'backend' | 'hybrid',
@@ -143,7 +138,7 @@ export const earnoutConfig = {
   /**
    * Package ID where earnout module is deployed
    */
-  packageId: getOptionalEnvVar('EARNOUT_PACKAGE_ID', ''),
+  packageId: getEnvVar('EARNOUT_PACKAGE_ID'),
 };
 
 /**

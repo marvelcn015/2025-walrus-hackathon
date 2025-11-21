@@ -20,6 +20,37 @@ import { fromHex } from '@mysten/sui/utils';
 import { toast } from 'sonner';
 import { encryptData } from '@/src/frontend/lib/seal';
 
+// Shared signature cache (same as useDeals, useDashboard, useCreateDeal)
+interface SignatureCache {
+  signature: string;
+  message: string;
+  timestamp: number;
+  address: string;
+}
+
+const SIGNATURE_CACHE_DURATION = 4 * 60 * 1000;
+const SIGNATURE_CACHE_KEY = 'sui-signature-cache';
+
+function getPersistedSignatureCache(): SignatureCache | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = sessionStorage.getItem(SIGNATURE_CACHE_KEY);
+    if (!cached) return null;
+    return JSON.parse(cached) as SignatureCache;
+  } catch {
+    return null;
+  }
+}
+
+function setPersistedSignatureCache(cache: SignatureCache): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(SIGNATURE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export type DataType =
   | 'revenue_journal'
   | 'ebitda_report'
@@ -98,8 +129,11 @@ export function useWalrusUpload(): UseWalrusUploadReturn {
         if (enableEncryption) {
           toast.loading('Encrypting file...', { id: 'walrus-upload' });
 
-          const packageId = process.env.NEXT_PUBLIC_SEAL_PACKAGE_ID;
-          const whitelistObjectId = process.env.NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID;
+  const whitelistObjectId = process.env.NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID;
+  const packageId = process.env.NEXT_PUBLIC_EARNOUT_PACKAGE_ID;
+
+  const {
+    mutate: uploadFile,
 
           if (!packageId || !whitelistObjectId) {
             throw new Error(
@@ -124,15 +158,37 @@ export function useWalrusUpload(): UseWalrusUploadReturn {
           });
         }
 
-        // 2. Sign timestamp for authentication
-        toast.loading('Please sign the authentication message...', { id: 'walrus-upload' });
+        // 2. Get or create auth signature (reuse cached signature if available)
+        let signature: string;
+        let timestamp: string;
 
-        const timestamp = new Date().toISOString();
-        const messageBytes = new TextEncoder().encode(timestamp);
+        const cache = getPersistedSignatureCache();
+        const now = Date.now();
 
-        const { signature } = await signPersonalMessage({
-          message: messageBytes,
-        });
+        if (cache && cache.address === currentAccount.address && now - cache.timestamp < SIGNATURE_CACHE_DURATION) {
+          // Reuse cached signature
+          signature = cache.signature;
+          timestamp = cache.message;
+        } else {
+          // Sign new timestamp for authentication
+          toast.loading('Please sign the authentication message...', { id: 'walrus-upload' });
+
+          timestamp = new Date().toISOString();
+          const messageBytes = new TextEncoder().encode(timestamp);
+
+          const result = await signPersonalMessage({
+            message: messageBytes,
+          });
+          signature = result.signature;
+
+          // Cache the signature
+          setPersistedSignatureCache({
+            signature,
+            message: timestamp,
+            timestamp: now,
+            address: currentAccount.address,
+          });
+        }
 
         // 3. Prepare FormData for upload
         const formData = new FormData();

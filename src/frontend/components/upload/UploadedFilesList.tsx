@@ -53,7 +53,12 @@ export function UploadedFilesList({
       const encryptedBuffer = await response.arrayBuffer();
 
       // Get Seal configuration from environment
-      const packageId = process.env.NEXT_PUBLIC_SEAL_PACKAGE_ID;
+const UploadedFilesList = ({ dealId, periodId, files, onFileDeleted }: UploadedFilesListProps) => {
+  const { address } = useWallet();
+  const whitelistObjectId = process.env.NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID;
+  const packageId = process.env.NEXT_PUBLIC_EARNOUT_PACKAGE_ID;
+  const [isDecrypting, setIsDecrypting] = useState<Record<string, boolean>>({});
+  const [decryptedUrl, setDecryptedUrl] = useState<Record<string, string>>({});
       const whitelistObjectId = process.env.NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID;
 
       if (!packageId || !whitelistObjectId) {

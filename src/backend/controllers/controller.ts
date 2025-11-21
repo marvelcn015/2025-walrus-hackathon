@@ -237,14 +237,14 @@ export class WalrusController {
         }
 
         // Validate required config
-        if (!config.seal.policyObjectId || !config.seal.packageId) {
+        if (!config.seal.policyObjectId || !config.earnout.packageId) {
           return NextResponse.json(
             {
               error: 'ConfigurationError',
               message: 'Seal configuration is incomplete',
               statusCode: 500,
               details: {
-                reason: 'SEAL_POLICY_OBJECT_ID and SEAL_PACKAGE_ID must be set for server-side encryption',
+                reason: 'SEAL_POLICY_OBJECT_ID and EARNOUT_PACKAGE_ID must be set for server-side encryption',
               },
             },
             { status: 500 }
@@ -254,7 +254,7 @@ export class WalrusController {
         // Encrypt file using Seal with whitelist-based access control
         const encryptionConfig: WhitelistEncryptionConfig = {
           whitelistObjectId: config.seal.policyObjectId,
-          packageId: config.seal.packageId,
+          packageId: config.earnout.packageId,
         };
 
         const encryptionResult = await sealService.encrypt(fileBuffer, encryptionConfig);
@@ -437,8 +437,8 @@ export class WalrusController {
 
       // Add Seal policy information for client-side decryption
       // Frontend needs these to decrypt using Seal SDK
-      if (config.seal.packageId) {
-        headers['X-Seal-Package-Id'] = config.seal.packageId;
+      if (config.earnout.packageId) {
+        headers['X-Seal-Package-Id'] = config.earnout.packageId;
         headers['X-Seal-Whitelist-Id'] = whitelistObjectId; // dealId
       }
 
@@ -569,8 +569,8 @@ export class WalrusController {
           page: query.page || 1,
           limit: query.limit || 50,
           totalPages: 0,
-          sealPolicy: config.seal.packageId ? {
-            packageId: config.seal.packageId,
+          sealPolicy: config.earnout.packageId ? {
+            packageId: config.earnout.packageId,
             whitelistObjectId: dealId,
           } : undefined,
         } as DealBlobsListResponse, { status: 200 });
@@ -659,8 +659,8 @@ export class WalrusController {
         page,
         limit,
         totalPages,
-        sealPolicy: config.seal.packageId ? {
-          packageId: config.seal.packageId,
+        sealPolicy: config.earnout.packageId ? {
+          packageId: config.earnout.packageId,
           whitelistObjectId: dealId,
         } : undefined,
       };

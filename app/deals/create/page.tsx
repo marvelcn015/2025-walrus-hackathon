@@ -222,21 +222,6 @@ export default function CreateDealPage() {
                 )}
               </div>
             </div>
-
-            <div>
-              <Label htmlFor="startDate">Start Date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                {...register('startDate')}
-              />
-              {errors.startDate && (
-                <p className="text-sm text-destructive mt-1">{errors.startDate.message}</p>
-              )}
-              <p className="text-xs text-muted-foreground mt-1">
-                The date when the earn-out period begins
-              </p>
-            </div>
           </CardContent>
         </Card>
 
@@ -305,6 +290,20 @@ export default function CreateDealPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                type="date"
+                {...register('startDate')}
+              />
+              {errors.startDate && (
+                <p className="text-sm text-destructive mt-1">{errors.startDate.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                The date when the earn-out period begins
+              </p>
+            </div>
             <div>
               <Label htmlFor="earnoutPeriodYears">Earn-out Period (Years)</Label>
               <Input

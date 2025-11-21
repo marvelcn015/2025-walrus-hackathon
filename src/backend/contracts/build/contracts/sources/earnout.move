@@ -18,40 +18,53 @@ module contracts::earnout {
     const EMismatchLength: u64 = 6;
     const EInvalidAttestation: u64 = 8;
     const EKPIResultAlreadySubmitted: u64 = 9;
-    const EPeriodNotFound: u64 = 10;
+    const ESubperiodNotFound: u64 = 10;
     const EAlreadySettled: u64 = 11;
-    const EFormulaNotFound: u64 = 13;
+    const EParametersNotSet: u64 = 12;
     const EInsufficientPayment: u64 = 14;
 
 
     // --- Structs ---
 
+    /// Main Deal struct representing an M&A earn-out agreement
+    ///
+    /// Design: A Deal has ONE continuous earn-out period with cumulative KPI tracking.
+    /// The period is divided into multiple subperiods for document organization.
+    /// KPI values accumulate across subperiods, and settlement happens once at the end.
     public struct Deal has key, store {
         id: UID,
         name: String,
         buyer: address,
         seller: address,
         auditor: address,
-        start_date: u64,  // Unix timestamp (milliseconds) when earn-out period begins
-        periods: vector<Period>,
+        start_date: u64,              // Unix timestamp (ms) when earn-out begins
+
+        // Single period parameters (set via set_parameters, then locked)
+        period_months: u64,           // Total earn-out duration in months
+        kpi_threshold: u64,           // Cumulative KPI target to trigger payout
+        max_payout: u64,              // Maximum earn-out payment amount
+
+        // Subperiods for document organization (created in set_parameters)
+        subperiods: vector<Subperiod>,
+
+        // Settlement state
+        kpi_result: Option<KPIResult>,
+        is_settled: bool,
+        settled_amount: u64,
+
+        // Access control
         parameters_locked: bool,
         whitelist_id: ID,
         whitelist_cap: WhitelistCap,
     }
 
-    /// Formula for calculating earn-out for a period
-    public struct Formula has store, copy, drop {
-        kpi_threshold: u64,
-        max_payout: u64,
-    }
-
-    public struct Period has store {
-        id: String,
+    /// Subperiod for organizing documents within the earn-out period
+    /// Each subperiod represents a time slice (e.g., a month or quarter)
+    public struct Subperiod has store {
+        id: String,                   // e.g., "2025-11", "2025-Q4"
+        start_date: u64,              // Unix timestamp (ms)
+        end_date: u64,                // Unix timestamp (ms)
         walrus_blobs: vector<WalrusBlobRef>,
-        formula: Option<Formula>,
-        kpi_result: Option<KPIResult>,      // Nautilus TEE calculation result
-        is_settled: bool,
-        settled_amount: u64,
     }
 
     public struct WalrusBlobRef has store, copy, drop {
@@ -62,10 +75,10 @@ module contracts::earnout {
     }
 
     // KPI Calculation Result (from Nautilus TEE)
+    // Represents the cumulative KPI value at settlement time
     public struct KPIResult has store, copy, drop {
-        period_id: String,
-        kpi_type: String,             // e.g., "revenue", "ebitda"
-        value: u64,                   // Calculation result (in smallest unit)
+        kpi_type: String,             // e.g., "net_profit", "revenue"
+        value: u64,                   // Cumulative calculation result
         attestation: vector<u8>,      // Nautilus TEE attestation
         computed_at: u64,             // Computation timestamp
     }
@@ -75,7 +88,7 @@ module contracts::earnout {
         id: UID,
         data_id: String,              // Walrus blob ID
         deal_id: ID,                  // Parent Deal
-        period_id: String,            // Parent Period ID
+        subperiod_id: String,         // Parent Subperiod ID
         uploader: address,            // Uploader address
         upload_timestamp: u64,        // Upload timestamp
         audited: bool,                // Audit status (default false)
@@ -85,23 +98,39 @@ module contracts::earnout {
 
     // --- Events ---
 
-    public struct DealCreated has copy, drop { deal_id: ID, whitelist_id: ID, buyer: address, start_date: u64 }
-    public struct ParametersLocked has copy, drop { deal_id: ID }
-    public struct BlobAdded has copy, drop { deal_id: ID, period_id: String, blob_id: String }
-    
+    public struct DealCreated has copy, drop {
+        deal_id: ID,
+        whitelist_id: ID,
+        buyer: address,
+        start_date: u64
+    }
+
+    public struct ParametersLocked has copy, drop {
+        deal_id: ID,
+        period_months: u64,
+        subperiod_count: u64,
+        kpi_threshold: u64,
+        max_payout: u64,
+    }
+
+    public struct BlobAdded has copy, drop {
+        deal_id: ID,
+        subperiod_id: String,
+        blob_id: String
+    }
+
     // KPI Result Event
     public struct KPIResultSubmitted has copy, drop {
         deal_id: ID,
-        period_id: String,
         kpi_value: u64,
         timestamp: u64,
     }
 
     // Settlement Event
-    public struct PeriodSettled has copy, drop {
+    public struct DealSettled has copy, drop {
         deal_id: ID,
-        period_id: String,
         kpi_value: u64,
+        kpi_met: bool,
         payout_amount: u64,
     }
 
@@ -109,7 +138,7 @@ module contracts::earnout {
     public struct DataAuditRecordCreated has copy, drop {
         audit_record_id: ID,
         deal_id: ID,
-        period_id: String,
+        subperiod_id: String,
         data_id: String,
         uploader: address
     }
@@ -117,7 +146,7 @@ module contracts::earnout {
     public struct DataAudited has copy, drop {
         audit_record_id: ID,
         deal_id: ID,
-        period_id: String,
+        subperiod_id: String,
         data_id: String,
         auditor: address,
         timestamp: u64,
@@ -126,12 +155,15 @@ module contracts::earnout {
     // --- Functions ---
 
     /**
-    Sui Integration:
+    Create a new earn-out deal.
 
-    Writes: Creates new Deal object via earnout::create_deal()
-    Transaction: Returns unsigned transaction for frontend to sign
-    Events: Emits DealCreated event on-chain with dealId
-    Gas: Estimated ~1,000,000 MIST
+    The deal starts with no parameters set. Buyer must call set_parameters()
+    to configure the earn-out terms before any documents can be uploaded.
+
+    Sui Integration:
+    - Creates new Deal object
+    - Creates and shares Whitelist for Seal encryption access control
+    - Emits DealCreated event
     */
     public fun create_deal(
         name: String,
@@ -142,11 +174,11 @@ module contracts::earnout {
     ) {
         let buyer = tx_context::sender(ctx);
 
-        // 1. Create Whitelist
-        let (wl_cap,mut wl) = whitelist::create_whitelist(ctx);
+        // 1. Create Whitelist for Seal access control
+        let (wl_cap, mut wl) = whitelist::create_whitelist(ctx);
         let wl_id = object::id(&wl);
 
-        // 2. Add members
+        // 2. Add all parties to whitelist
         whitelist::add(&mut wl, &wl_cap, buyer);
         whitelist::add(&mut wl, &wl_cap, seller);
         whitelist::add(&mut wl, &wl_cap, auditor);
@@ -154,7 +186,7 @@ module contracts::earnout {
         // 3. Share Whitelist
         whitelist::share_whitelist(wl);
 
-        // 4. Create Deal
+        // 4. Create Deal with unset parameters
         let deal = Deal {
             id: object::new(ctx),
             name,
@@ -162,7 +194,13 @@ module contracts::earnout {
             seller,
             auditor,
             start_date,
-            periods: vector::empty(),
+            period_months: 0,
+            kpi_threshold: 0,
+            max_payout: 0,
+            subperiods: vector::empty(),
+            kpi_result: option::none(),
+            is_settled: false,
+            settled_amount: 0,
             parameters_locked: false,
             whitelist_id: wl_id,
             whitelist_cap: wl_cap,
@@ -178,49 +216,65 @@ module contracts::earnout {
         transfer::share_object(deal);
     }
 
-    /// This function sets the financial parameters for the deal by creating all periods at once.
-    /// Once this is called, the deal parameters are locked and cannot be changed.
+    /// Set the earn-out parameters and create subperiods.
+    ///
+    /// This function:
+    /// 1. Sets the single period parameters (duration, KPI threshold, max payout)
+    /// 2. Creates the specified subperiods for document organization
+    /// 3. Locks parameters permanently
+    ///
+    /// Parameters:
+    /// - period_months: Total earn-out duration
+    /// - kpi_threshold: Cumulative KPI target
+    /// - max_payout: Payment if KPI is met
+    /// - subperiod_ids: IDs for each subperiod (e.g., ["2025-11", "2025-12", ...])
+    /// - subperiod_start_dates: Start timestamp for each subperiod
+    /// - subperiod_end_dates: End timestamp for each subperiod
     public fun set_parameters(
         deal: &mut Deal,
-        period_ids: vector<String>,
-        thresholds: vector<u64>,
-        max_payouts: vector<u64>,
+        period_months: u64,
+        kpi_threshold: u64,
+        max_payout: u64,
+        subperiod_ids: vector<String>,
+        subperiod_start_dates: vector<u64>,
+        subperiod_end_dates: vector<u64>,
         ctx: &mut TxContext
     ) {
         let sender = tx_context::sender(ctx);
         assert!(sender == deal.buyer, ENotBuyer);
         assert!(!deal.parameters_locked, EParametersLocked);
 
-        let len = vector::length(&period_ids);
-        assert!(vector::length(&thresholds) == len, EMismatchLength);
-        assert!(vector::length(&max_payouts) == len, EMismatchLength);
+        let len = vector::length(&subperiod_ids);
+        assert!(vector::length(&subperiod_start_dates) == len, EMismatchLength);
+        assert!(vector::length(&subperiod_end_dates) == len, EMismatchLength);
 
-        // Batch create Periods
+        // Set period parameters
+        deal.period_months = period_months;
+        deal.kpi_threshold = kpi_threshold;
+        deal.max_payout = max_payout;
+
+        // Create subperiods
         let mut i = 0;
         while (i < len) {
-            let formula = Formula {
-                kpi_threshold: *vector::borrow(&thresholds, i),
-                max_payout: *vector::borrow(&max_payouts, i),
-            };
-
-            let period = Period {
-                id: *vector::borrow(&period_ids, i),
+            let subperiod = Subperiod {
+                id: *vector::borrow(&subperiod_ids, i),
+                start_date: *vector::borrow(&subperiod_start_dates, i),
+                end_date: *vector::borrow(&subperiod_end_dates, i),
                 walrus_blobs: vector::empty(),
-                formula: option::some(formula),
-                kpi_result: option::none(),
-                is_settled: false,
-                settled_amount: 0,
             };
-            
-            vector::push_back(&mut deal.periods, period);
+            vector::push_back(&mut deal.subperiods, subperiod);
             i = i + 1;
         };
 
-        // Lock the parameters so they cannot be changed later
+        // Lock parameters
         deal.parameters_locked = true;
 
         event::emit(ParametersLocked {
-            deal_id: object::id(deal)
+            deal_id: object::id(deal),
+            period_months,
+            subperiod_count: len,
+            kpi_threshold,
+            max_payout,
         });
     }
 
@@ -234,18 +288,16 @@ module contracts::earnout {
         assert!(object::id(wl) == deal.whitelist_id, ENotAuthorized);
 
         whitelist::remove(wl, &deal.whitelist_cap, deal.auditor);
-
         deal.auditor = new_auditor;
-
         whitelist::add(wl, &deal.whitelist_cap, new_auditor);
     }
 
-    // --- Data Audit Functions ---
+    // --- Data Upload Functions ---
 
     /// Internal function to create audit record when blob is uploaded
     fun create_audit_record_internal(
         deal_id: ID,
-        period_id: String,
+        subperiod_id: String,
         data_id: String,
         uploader: address,
         upload_timestamp: u64,
@@ -255,7 +307,7 @@ module contracts::earnout {
             id: object::new(ctx),
             data_id,
             deal_id,
-            period_id,
+            subperiod_id,
             uploader,
             upload_timestamp,
             audited: false,
@@ -268,7 +320,7 @@ module contracts::earnout {
         event::emit(DataAuditRecordCreated {
             audit_record_id,
             deal_id,
-            period_id,
+            subperiod_id,
             data_id,
             uploader
         });
@@ -276,9 +328,13 @@ module contracts::earnout {
         transfer::share_object(audit_record);
     }
 
+    /// Add a Walrus blob reference to a subperiod
+    ///
+    /// Documents are organized by subperiod for easier tracking and auditing.
+    /// The blob_id should be the Walrus blob ID after uploading encrypted data.
     public fun add_walrus_blob(
         deal: &mut Deal,
-        period_index: u64,
+        subperiod_index: u64,
         blob_id: String,
         data_type: String,
         clock: &Clock,
@@ -286,12 +342,14 @@ module contracts::earnout {
     ) {
         let sender = tx_context::sender(ctx);
         assert!(sender == deal.buyer, ENotBuyer);
-        
-        // [Fix]: 必須在 borrow_mut 之前先取得 deal_id，避免所有權衝突
-        let deal_id = object::id(deal);
+        assert!(deal.parameters_locked, EParametersNotSet);
 
-        let period = vector::borrow_mut(&mut deal.periods, period_index);
-        let period_id_copy = period.id; // Copy for event
+        let deal_id = object::id(deal);
+        let subperiods_len = vector::length(&deal.subperiods);
+        assert!(subperiod_index < subperiods_len, ESubperiodNotFound);
+
+        let subperiod = vector::borrow_mut(&mut deal.subperiods, subperiod_index);
+        let subperiod_id_copy = subperiod.id;
 
         let timestamp = clock::timestamp_ms(clock);
 
@@ -302,24 +360,26 @@ module contracts::earnout {
             uploader: sender,
         };
 
-        vector::push_back(&mut period.walrus_blobs, blob_ref);
+        vector::push_back(&mut subperiod.walrus_blobs, blob_ref);
 
         event::emit(BlobAdded {
-            deal_id: deal_id, // 使用上面預先儲存的 ID
-            period_id: period_id_copy,
+            deal_id,
+            subperiod_id: subperiod_id_copy,
             blob_id
         });
 
         // Create DataAuditRecord for this blob
         create_audit_record_internal(
             deal_id,
-            period_id_copy,
+            subperiod_id_copy,
             blob_id,
             sender,
             timestamp,
             ctx
         );
     }
+
+    // --- Data Audit Functions ---
 
     /// Auditor audits a data record with signature verification
     public fun audit_data(
@@ -332,16 +392,11 @@ module contracts::earnout {
     ) {
         let sender = tx_context::sender(ctx);
 
-        // Check if caller is the auditor
         assert!(sender == deal.auditor, ENotAuditor);
-
-        // Check if already audited
         assert!(!audit_record.audited, EAlreadyAudited);
-
-        // Check if audit_record belongs to this deal
         assert!(audit_record.deal_id == object::id(deal), ENotAuthorized);
 
-        // Build the message that should have been signed: "AUDIT:{data_id}"
+        // Build the message: "AUDIT:{data_id}"
         let mut message = vector::empty<u8>();
         vector::append(&mut message, b"AUDIT:");
         vector::append(&mut message, *audit_record.data_id.as_bytes());
@@ -356,24 +411,20 @@ module contracts::earnout {
         audit_record.auditor = option::some(sender);
         audit_record.audit_timestamp = option::some(timestamp);
 
-        // Emit event
         event::emit(DataAudited {
             audit_record_id: object::id(audit_record),
             deal_id: audit_record.deal_id,
-            period_id: audit_record.period_id,
+            subperiod_id: audit_record.subperiod_id,
             data_id: audit_record.data_id,
             auditor: sender,
             timestamp,
         });
     }
 
-    /// Check if all data in a period has been audited
-    /// Returns (total_count, audited_count, is_ready)
-    /// Note: This is a view function that can be called from frontend
-    /// Frontend needs to query all DataAuditRecord objects for the deal/period first
-    public fun check_period_audit_status(
+    /// Check audit status for a subperiod
+    public fun check_subperiod_audit_status(
         deal_id: ID,
-        period_id: String,
+        subperiod_id: String,
         audit_records: &vector<DataAuditRecord>
     ): (u64, u64, bool) {
         let mut total_count = 0;
@@ -384,15 +435,12 @@ module contracts::earnout {
 
         while (i < len) {
             let record = vector::borrow(audit_records, i);
-
-            // Only count records for this deal and period
-            if (record.deal_id == deal_id && record.period_id == period_id) {
+            if (record.deal_id == deal_id && record.subperiod_id == subperiod_id) {
                 total_count = total_count + 1;
                 if (record.audited) {
                     audited_count = audited_count + 1;
                 };
             };
-
             i = i + 1;
         };
 
@@ -400,87 +448,28 @@ module contracts::earnout {
         (total_count, audited_count, is_ready)
     }
 
-    // --- Accessor Functions for DataAuditRecord ---
+    // --- Settlement Functions ---
 
-    public fun audit_record_is_audited(record: &DataAuditRecord): bool {
-        record.audited
-    }
-
-    public fun audit_record_data_id(record: &DataAuditRecord): String {
-        record.data_id
-    }
-
-    public fun audit_record_deal_id(record: &DataAuditRecord): ID {
-        record.deal_id
-    }
-
-    public fun audit_record_period_id(record: &DataAuditRecord): String {
-        record.period_id
-    }
-
-    public fun audit_record_uploader(record: &DataAuditRecord): address {
-        record.uploader
-    }
-
-    public fun audit_record_upload_timestamp(record: &DataAuditRecord): u64 {
-        record.upload_timestamp
-    }
-
-    public fun audit_record_auditor(record: &DataAuditRecord): Option<address> {
-        record.auditor
-    }
-
-    public fun audit_record_audit_timestamp(record: &DataAuditRecord): Option<u64> {
-        record.audit_timestamp
-    }
-
-    // --- Nautilus TEE Integration Functions ---
-
-    /// Verify Nautilus TEE attestation
-    /// This is a simplified version - production should verify actual TEE signatures
+    /// Verify Nautilus TEE attestation (simplified for now)
     public fun verify_nautilus_attestation(
         attestation: &vector<u8>,
-        _expected_period_id: &String,
         _expected_kpi_value: u64,
     ): bool {
-        // In production, this should:
-        // 1. Parse attestation structure
-        // 2. Verify enclave ID is in whitelist
-        // 3. Verify TEE signature
-        // 4. Verify output hash matches expected values
-
-        // For now, we do basic length validation
-        // A real attestation should be at least 32 bytes (signature)
         let attestation_length = vector::length(attestation);
-
-        // Basic validation: attestation should not be empty
         if (attestation_length == 0) {
             return false
         };
-
         // TODO: Implement actual TEE attestation verification
-        // - Parse attestation bytes
-        // - Extract and verify enclave ID
-        // - Verify cryptographic signature
-        // - Validate output hash
-
-        true // Placeholder - accept all non-empty attestations for now
+        true
     }
 
-    /// Submit KPI result and execute settlement in a single transaction.
-    /// This function combines KPI submission and settlement into one atomic operation.
+    /// Submit cumulative KPI result and execute settlement.
     ///
-    /// Requirements:
-    /// - Caller must be the buyer
-    /// - Period must not be already settled
-    /// - KPI result must not be already submitted
-    /// - Valid Nautilus TEE attestation required
-    /// - Formula must be configured for the period
-    /// - Payment must be sufficient to cover the payout
+    /// This settles the entire deal based on cumulative KPI across all subperiods.
+    /// Settlement can only happen once per deal.
     #[allow(lint(self_transfer))]
-    public fun submit_kpi_result(
+    public fun submit_kpi_and_settle(
         deal: &mut Deal,
-        period_index: u64,
         kpi_type: String,
         kpi_value: u64,
         attestation: vector<u8>,
@@ -488,60 +477,48 @@ module contracts::earnout {
         clock: &Clock,
         ctx: &mut TxContext
     ) {
-        // Only buyer can submit KPI result
         let sender = tx_context::sender(ctx);
         assert!(sender == deal.buyer, ENotBuyer);
+        assert!(deal.parameters_locked, EParametersNotSet);
+        assert!(!deal.is_settled, EAlreadySettled);
+        assert!(option::is_none(&deal.kpi_result), EKPIResultAlreadySubmitted);
 
-        // Get deal_id and seller early before borrowing period
-        let deal_id = object::id(deal);
-        let seller = deal.seller;
-
-        // Get the period
-        let periods_len = vector::length(&deal.periods);
-        assert!(period_index < periods_len, EPeriodNotFound);
-        let period = vector::borrow_mut(&mut deal.periods, period_index);
-
-        // Check if period is already settled
-        assert!(!period.is_settled, EAlreadySettled);
-
-        // Check if KPI result already submitted
-        assert!(option::is_none(&period.kpi_result), EKPIResultAlreadySubmitted);
-
-        // Verify Nautilus attestation
-        let is_valid = verify_nautilus_attestation(
-            &attestation,
-            &period.id,
-            kpi_value
-        );
+        // Verify attestation
+        let is_valid = verify_nautilus_attestation(&attestation, kpi_value);
         assert!(is_valid, EInvalidAttestation);
 
-        // Verify Formula exists
-        assert!(option::is_some(&period.formula), EFormulaNotFound);
-        let formula = option::borrow(&period.formula);
-
-        // Calculate payout amount based on KPI result
-        let payout_amount = if (kpi_value >= formula.kpi_threshold) {
-            formula.max_payout
-        } else {
-            0
-        };
-
-        // Check if payment is sufficient
-        assert!(coin::value(&payment) >= payout_amount, EInsufficientPayment);
-
-        // Create and store KPI result
+        let deal_id = object::id(deal);
+        let seller = deal.seller;
         let timestamp = clock::timestamp_ms(clock);
-        let period_id = period.id;
+
+        // Store KPI result
         let kpi_result = KPIResult {
-            period_id,
             kpi_type,
             value: kpi_value,
             attestation,
             computed_at: timestamp,
         };
-        period.kpi_result = option::some(kpi_result);
+        deal.kpi_result = option::some(kpi_result);
 
-        // Execute settlement: transfer payout to seller
+        // Emit KPI submission event
+        event::emit(KPIResultSubmitted {
+            deal_id,
+            kpi_value,
+            timestamp,
+        });
+
+        // Calculate payout based on cumulative KPI
+        let kpi_met = kpi_value >= deal.kpi_threshold;
+        let payout_amount = if (kpi_met) {
+            deal.max_payout
+        } else {
+            0
+        };
+
+        // Check payment is sufficient
+        assert!(coin::value(&payment) >= payout_amount, EInsufficientPayment);
+
+        // Execute settlement
         if (payout_amount > 0) {
             let payout_coin = coin::split(&mut payment, payout_amount, ctx);
             transfer::public_transfer(payout_coin, seller);
@@ -550,53 +527,42 @@ module contracts::earnout {
         // Return remaining payment to buyer
         transfer::public_transfer(payment, sender);
 
-        // Mark period as settled
-        period.is_settled = true;
-        period.settled_amount = payout_amount;
+        // Mark deal as settled
+        deal.is_settled = true;
+        deal.settled_amount = payout_amount;
 
-        // Emit KPI submission event
-        event::emit(KPIResultSubmitted {
+        event::emit(DealSettled {
             deal_id,
-            period_id,
             kpi_value,
-            timestamp,
-        });
-
-        // Emit settlement event
-        event::emit(PeriodSettled {
-            deal_id,
-            period_id,
-            kpi_value,
+            kpi_met,
             payout_amount,
         });
     }
 
-    // --- Accessor Functions for KPIResult ---
+    // --- Accessor Functions ---
 
-    public fun kpi_result_period_id(result: &KPIResult): String {
-        result.period_id
-    }
+    // Deal accessors
+    public fun deal_start_date(deal: &Deal): u64 { deal.start_date }
+    public fun deal_period_months(deal: &Deal): u64 { deal.period_months }
+    public fun deal_kpi_threshold(deal: &Deal): u64 { deal.kpi_threshold }
+    public fun deal_max_payout(deal: &Deal): u64 { deal.max_payout }
+    public fun deal_is_settled(deal: &Deal): bool { deal.is_settled }
+    public fun deal_settled_amount(deal: &Deal): u64 { deal.settled_amount }
+    public fun deal_subperiod_count(deal: &Deal): u64 { vector::length(&deal.subperiods) }
 
-    public fun kpi_result_kpi_type(result: &KPIResult): String {
-        result.kpi_type
-    }
+    // DataAuditRecord accessors
+    public fun audit_record_is_audited(record: &DataAuditRecord): bool { record.audited }
+    public fun audit_record_data_id(record: &DataAuditRecord): String { record.data_id }
+    public fun audit_record_deal_id(record: &DataAuditRecord): ID { record.deal_id }
+    public fun audit_record_subperiod_id(record: &DataAuditRecord): String { record.subperiod_id }
+    public fun audit_record_uploader(record: &DataAuditRecord): address { record.uploader }
+    public fun audit_record_upload_timestamp(record: &DataAuditRecord): u64 { record.upload_timestamp }
+    public fun audit_record_auditor(record: &DataAuditRecord): Option<address> { record.auditor }
+    public fun audit_record_audit_timestamp(record: &DataAuditRecord): Option<u64> { record.audit_timestamp }
 
-    public fun kpi_result_value(result: &KPIResult): u64 {
-        result.value
-    }
-
-    public fun kpi_result_attestation(result: &KPIResult): vector<u8> {
-        result.attestation
-    }
-
-    public fun kpi_result_computed_at(result: &KPIResult): u64 {
-        result.computed_at
-    }
-
-    // --- Accessor Functions for Deal ---
-
-    public fun deal_start_date(deal: &Deal): u64 {
-        deal.start_date
-    }
-
+    // KPIResult accessors
+    public fun kpi_result_kpi_type(result: &KPIResult): String { result.kpi_type }
+    public fun kpi_result_value(result: &KPIResult): u64 { result.value }
+    public fun kpi_result_attestation(result: &KPIResult): vector<u8> { result.attestation }
+    public fun kpi_result_computed_at(result: &KPIResult): u64 { result.computed_at }
 }

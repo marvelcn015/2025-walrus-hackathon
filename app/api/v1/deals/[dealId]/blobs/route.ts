@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { suiService } from '@/src/backend/services/sui-service';
 import { walrusService } from '@/src/backend/services/walrus-service';
-import { config } from '@/src/shared/config/env';
 import type { BlobReference, DataType } from '@/src/shared/types/walrus';
 
 /**

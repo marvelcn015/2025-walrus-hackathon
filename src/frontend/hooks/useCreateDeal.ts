@@ -18,6 +18,37 @@ import {
 import { fromHex } from '@mysten/sui/utils';
 import { toast } from 'sonner';
 
+// Shared signature cache (same as useDeals and useDashboard)
+interface SignatureCache {
+  signature: string;
+  message: string;
+  timestamp: number;
+  address: string;
+}
+
+const SIGNATURE_CACHE_DURATION = 4 * 60 * 1000;
+const SIGNATURE_CACHE_KEY = 'sui-signature-cache';
+
+function getPersistedSignatureCache(): SignatureCache | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = sessionStorage.getItem(SIGNATURE_CACHE_KEY);
+    if (!cached) return null;
+    return JSON.parse(cached) as SignatureCache;
+  } catch {
+    return null;
+  }
+}
+
+function setPersistedSignatureCache(cache: SignatureCache): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(SIGNATURE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 interface CreateDealOptions {
   name: string;
   sellerAddress: string;
@@ -57,15 +88,37 @@ export function useCreateDeal(): UseCreateDealReturn {
       setError(null);
 
       try {
-        // 1. Sign timestamp for authentication
-        const timestamp = new Date().toISOString();
-        const messageBytes = new TextEncoder().encode(timestamp);
+        // 1. Get or create auth signature (reuse cached signature if available)
+        let signature: string;
+        let timestamp: string;
 
-        toast.info('Please sign the authentication message in your wallet');
+        const cache = getPersistedSignatureCache();
+        const now = Date.now();
 
-        const { signature } = await signPersonalMessage({
-          message: messageBytes,
-        });
+        if (cache && cache.address === currentAccount.address && now - cache.timestamp < SIGNATURE_CACHE_DURATION) {
+          // Reuse cached signature
+          signature = cache.signature;
+          timestamp = cache.message;
+        } else {
+          // Sign new timestamp for authentication
+          timestamp = new Date().toISOString();
+          const messageBytes = new TextEncoder().encode(timestamp);
+
+          toast.info('Please sign the authentication message in your wallet');
+
+          const result = await signPersonalMessage({
+            message: messageBytes,
+          });
+          signature = result.signature;
+
+          // Cache the signature
+          setPersistedSignatureCache({
+            signature,
+            message: timestamp,
+            timestamp: now,
+            address: currentAccount.address,
+          });
+        }
 
         // 2. Call API to build transaction
         toast.loading('Creating deal transaction...', { id: 'create-deal' });

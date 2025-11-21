@@ -526,10 +526,15 @@ export class SuiService {
     buyer: string;
     seller: string;
     auditor: string;
-    startDate: number; // Unix timestamp in milliseconds
+    startDate: number;          // Unix timestamp in milliseconds
+    periodMonths: number;       // Total earn-out duration
+    kpiThreshold: number;       // Cumulative KPI target
+    maxPayout: number;          // Maximum payment amount
+    isSettled: boolean;
+    settledAmount: number;
     parametersLocked: boolean;
     whitelistId: string;
-    periods: unknown[];
+    subperiods: unknown[];      // Subperiods for document organization
   } | null> {
     try {
       if (debugConfig.sui) {
@@ -553,6 +558,17 @@ export class SuiService {
         return null;
       }
 
+      // Verify the Deal belongs to the current package
+      const objectType = dealObject.data.type;
+      const expectedType = `${config.earnout.packageId}::earnout::Deal`;
+
+      if (objectType !== expectedType) {
+        if (debugConfig.sui) {
+          console.log(`Deal ${dealId} belongs to different package. Expected: ${expectedType}, Got: ${objectType}`);
+        }
+        return null;
+      }
+
       const fields = content.fields as Record<string, unknown>;
 
       return {
@@ -562,9 +578,14 @@ export class SuiService {
         seller: fields.seller as string || '',
         auditor: fields.auditor as string || '',
         startDate: Number(fields.start_date) || 0,
+        periodMonths: Number(fields.period_months) || 0,
+        kpiThreshold: Number(fields.kpi_threshold) || 0,
+        maxPayout: Number(fields.max_payout) || 0,
+        isSettled: fields.is_settled as boolean || false,
+        settledAmount: Number(fields.settled_amount) || 0,
         parametersLocked: fields.parameters_locked as boolean || false,
         whitelistId: (fields.whitelist_id as string) || '',
-        periods: (fields.periods as unknown[]) || [],
+        subperiods: (fields.subperiods as unknown[]) || [],
       };
     } catch (error) {
       console.error('Failed to query deal:', error);
@@ -612,15 +633,21 @@ export class SuiService {
       }
 
       // Query DealCreated events to find all deals
+      const eventType = `${config.earnout.packageId}::earnout::DealCreated`;
+
+      if (debugConfig.sui) {
+        console.log(`Querying DealCreated events with type: ${eventType}`);
+      }
+
       const events = await this.client.queryEvents({
         query: {
-          MoveEventType: `${config.earnout.packageId}::earnout::DealCreated`,
+          MoveEventType: eventType,
         },
         limit: 1000,
       });
 
       if (debugConfig.sui) {
-        console.log(`Found ${events.data.length} DealCreated events`);
+        console.log(`Found ${events.data.length} DealCreated events from package ${config.earnout.packageId}`);
       }
 
       // Extract unique deal IDs
@@ -659,7 +686,12 @@ export class SuiService {
       for (const dealId of dealIds) {
         try {
           const deal = await this.getDeal(dealId);
-          if (!deal) continue;
+          if (!deal) {
+            if (debugConfig.sui) {
+              console.log(`Deal ${dealId} was filtered out (wrong package or not found)`);
+            }
+            continue;
+          }
 
           // Determine user's role in this deal
           let userRole: 'buyer' | 'seller' | 'auditor' | null = null;
@@ -680,10 +712,8 @@ export class SuiService {
           // Determine deal status
           let status: 'draft' | 'active' | 'completed' = 'draft';
           if (deal.parametersLocked) {
-            // Check if all periods are settled
-            const periods = deal.periods as Array<{ is_settled?: boolean }>;
-            const allSettled = periods.length > 0 && periods.every(p => p.is_settled);
-            status = allSettled ? 'completed' : 'active';
+            // Check if deal is settled
+            status = deal.isSettled ? 'completed' : 'active';
           }
 
           userDeals.push({
@@ -696,7 +726,7 @@ export class SuiService {
             status,
             parametersLocked: deal.parametersLocked,
             whitelistId: deal.whitelistId,
-            periodCount: (deal.periods as unknown[]).length,
+            periodCount: (deal.subperiods as unknown[]).length,
           });
         } catch (error) {
           console.error(`Failed to fetch deal ${dealId}:`, error);
