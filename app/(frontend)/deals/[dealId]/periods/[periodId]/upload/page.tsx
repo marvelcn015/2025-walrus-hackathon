@@ -525,8 +525,14 @@ export default function DocumentsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              // TODO: Implement download from Walrus
-                              toast.info('Download functionality coming soon');
+                              const url = `/api/v1/walrus/download/${blob.blobId}`;
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = blob.dataType;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              toast.success(`Downloading ${blob.dataType}`);
                             }}
                           >
                             <Download className="h-4 w-4" />

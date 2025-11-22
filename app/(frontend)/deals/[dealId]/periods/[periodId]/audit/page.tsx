@@ -173,8 +173,14 @@ export default function DataAuditPage() {
   };
 
   const handleDownload = (record: DealBlobItem) => {
-    // Implement download logic
-    toast.info('Download functionality coming soon');
+    const url = `/api/v1/walrus/download/${record.blobId}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = record.metadata.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast.success(`Downloading ${record.metadata.filename}`);
   };
 
   return (

@@ -604,6 +604,8 @@ export class SuiService {
       //   seller: address,
       //   auditor: address,
       //   start_date: u64,
+      //   original_cost: u64,
+      //   estimated_useful_life_months: u64,
       //   period_months: u64,
       //   kpi_threshold: u64,
       //   max_payout: u64,
@@ -612,6 +614,11 @@ export class SuiService {
       //   subperiod_end_dates: vector<u64>,
       //   ctx: &mut TxContext
       // )
+
+      // Default values for new accounting fields (can be updated later via API)
+      const originalCost = 0; // Default: no original cost
+      const estimatedUsefulLifeMonths = 12; // Default: 1 year
+
       tx.moveCall({
         target: `${config.earnout.packageId}::earnout::create_deal`,
         arguments: [
@@ -619,6 +626,8 @@ export class SuiService {
           tx.pure.address(sellerAddress),
           tx.pure.address(auditorAddress),
           tx.pure.u64(startDateMs),
+          tx.pure.u64(originalCost), // New parameter
+          tx.pure.u64(estimatedUsefulLifeMonths), // New parameter
           tx.pure.u64(periodMonths),
           tx.pure.u64(kpiThreshold),
           tx.pure.u64(maxPayout),

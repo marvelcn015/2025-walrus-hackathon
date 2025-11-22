@@ -62,7 +62,7 @@ export function FileUploadZone({
         const packageId = process.env.NEXT_PUBLIC_EARNOUT_PACKAGE_ID;
 
         if (!packageId) {
-          throw new Error('Seal encryption is not configured. Please set NEXT_PUBLIC_SEAL_PACKAGE_ID.');
+          throw new Error('Seal encryption is not configured. Please set NEXT_PUBLIC_EARNOUT_PACKAGE_ID.');
         }
 
         // Encrypt data using Seal
@@ -72,6 +72,7 @@ export function FileUploadZone({
           dealId, // Use dealId as the whitelistObjectId
           packageId
         );
+
 
         // Convert Uint8Array to Blob using Array.from() to avoid TypeScript issues
         blobToUpload = new Blob([new Uint8Array(encryptedBuffer)], { type: 'application/octet-stream' });

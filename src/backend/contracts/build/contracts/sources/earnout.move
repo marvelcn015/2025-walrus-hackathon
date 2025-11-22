@@ -38,6 +38,8 @@ module contracts::earnout {
         seller: address,
         auditor: address,
         start_date: u64,              // Unix timestamp (ms) when earn-out begins
+        original_cost: u64,           // Original acquisition cost
+        estimated_useful_life_months: u64, // Estimated useful life in months
 
         // Single period parameters
         period_months: u64,           // Total earn-out duration in months
@@ -163,6 +165,8 @@ module contracts::earnout {
         seller: address,
         auditor: address,
         start_date: u64,
+        original_cost: u64,
+        estimated_useful_life_months: u64,
         period_months: u64,
         kpi_threshold: u64,
         max_payout: u64,
@@ -186,6 +190,8 @@ module contracts::earnout {
             seller,
             auditor,
             start_date,
+            original_cost,
+            estimated_useful_life_months,
             period_months,
             kpi_threshold,
             max_payout,
@@ -219,21 +225,6 @@ module contracts::earnout {
         });
 
         transfer::share_object(deal);
-    }
-
-
-
-    /// Change the auditor of a Deal
-    ///
-    /// Only the buyer can change the auditor.
-    /// The new auditor will have access to decrypt all files encrypted with this Deal's ID.
-    public fun change_auditor(
-        deal: &mut Deal,
-        new_auditor: address,
-        ctx: &mut TxContext
-    ) {
-        assert!(tx_context::sender(ctx) == deal.buyer, ENotAuthorized);
-        deal.auditor = new_auditor;
     }
 
     // --- Data Upload Functions ---
@@ -505,36 +496,28 @@ module contracts::earnout {
     /// This function is called by Seal Key Servers to verify decryption access.
     /// Access is granted to the buyer, seller, or auditor of the Deal.
     ///
-    /// The key-id format from Seal SDK is: [packageId (32 bytes)][dealId (32 bytes)]
-    /// We verify that bytes 32-63 match the Deal object ID.
-    ///
     /// Arguments:
-    /// - id: The key-id being requested (format: packageId + dealId)
+    /// - id: The Deal object ID as bytes (32 bytes)
     /// - deal: Reference to the Deal controlling access
     /// - ctx: Transaction context (provides sender address)
     ///
-    /// Aborts with ENoSealAccess if the caller is not a Deal participant.
+    /// Aborts with ENoSealAccess if:
+    /// - The id doesn't match this Deal's object ID
+    /// - The caller is not a Deal participant (buyer/seller/auditor)
     entry fun seal_approve(id: vector<u8>, deal: &Deal, ctx: &TxContext) {
         let sender = tx_context::sender(ctx);
 
-        // Seal SDK key-id format: [packageId (32 bytes)][dealId (32 bytes)]
-        // We need to verify that bytes 32-63 match the Deal object ID
+        // Verify the id matches the Deal's object ID
         let deal_id_bytes = object::id_to_bytes(&object::id(deal));
-        let package_id_length = 32u64; // Package ID is always 32 bytes
 
-        // Verify the key-id is long enough (must be at least 64 bytes: packageId + dealId)
-        if (vector::length(&id) < package_id_length + vector::length(&deal_id_bytes)) {
-            abort ENoSealAccess
-        };
+        // Compare all bytes
+        assert!(vector::length(&id) == vector::length(&deal_id_bytes), ENoSealAccess);
 
-        // Compare bytes starting from offset 32 (after package ID)
         let mut i = 0;
         while (i < vector::length(&deal_id_bytes)) {
-            let key_id_byte = *vector::borrow(&id, package_id_length + i);
+            let id_byte = *vector::borrow(&id, i);
             let deal_id_byte = *vector::borrow(&deal_id_bytes, i);
-            if (key_id_byte != deal_id_byte) {
-                abort ENoSealAccess
-            };
+            assert!(id_byte == deal_id_byte, ENoSealAccess);
             i = i + 1;
         };
 
@@ -543,10 +526,26 @@ module contracts::earnout {
         assert!(has_access, ENoSealAccess);
     }
 
+    /// Check if an address has access to decrypt data for this Deal
+    ///
+    /// This is a helper function that can be called by frontend or backend
+    /// to verify access before attempting decryption.
+    ///
+    /// Arguments:
+    /// - deal: Reference to the Deal
+    /// - user: Address to check
+    ///
+    /// Returns: true if the user is buyer, seller, or auditor
+    public fun has_decrypt_access(deal: &Deal, user: address): bool {
+        user == deal.buyer || user == deal.seller || user == deal.auditor
+    }
+
     // --- Accessor Functions ---
 
     // Deal accessors
     public fun deal_start_date(deal: &Deal): u64 { deal.start_date }
+    public fun deal_original_cost(deal: &Deal): u64 { deal.original_cost }
+    public fun deal_estimated_useful_life_months(deal: &Deal): u64 { deal.estimated_useful_life_months }
     public fun deal_period_months(deal: &Deal): u64 { deal.period_months }
     public fun deal_kpi_threshold(deal: &Deal): u64 { deal.kpi_threshold }
     public fun deal_max_payout(deal: &Deal): u64 { deal.max_payout }

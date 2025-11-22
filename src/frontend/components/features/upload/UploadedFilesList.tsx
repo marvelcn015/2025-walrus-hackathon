@@ -75,7 +75,7 @@ export function UploadedFilesList({
       const packageId = process.env.NEXT_PUBLIC_EARNOUT_PACKAGE_ID;
 
       if (!packageId) {
-        throw new Error('Seal decryption is not configured. Please set NEXT_PUBLIC_SEAL_PACKAGE_ID.');
+        throw new Error('Seal decryption is not configured. Please set NEXT_PUBLIC_EARNOUT_PACKAGE_ID.');
       }
 
       const decryptedBuffer = await decryptData(

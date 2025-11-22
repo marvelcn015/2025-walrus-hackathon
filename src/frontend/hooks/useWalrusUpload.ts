@@ -125,7 +125,7 @@ export function useWalrusUpload(): UseWalrusUploadReturn {
 
           if (!packageId) {
             throw new Error(
-              'Seal encryption is not configured. Please set NEXT_PUBLIC_SEAL_PACKAGE_ID.'
+              'Seal encryption is not configured. Please set NEXT_PUBLIC_EARNOUT_PACKAGE_ID.'
             );
           }
 
