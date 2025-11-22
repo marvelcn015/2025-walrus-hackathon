@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { suiService } from '@/src/backend/services/sui-service';
+import { walrusService } from '@/src/backend/services/walrus-service';
 
 /**
  * GET /api/v1/deals/:dealId/periods/:periodId/blobs
@@ -48,18 +49,43 @@ export async function GET(
     // Query blobs from blockchain
     const blobs = await suiService.getSubperiodBlobReferences(dealId, periodId);
 
+    // Fetch metadata from Walrus for each blob
+    const blobsWithMetadata = await Promise.all(
+      blobs.map(async (blob) => {
+        try {
+          // Download blob from Walrus to extract metadata
+          const walrusBlob = await walrusService.download(blob.blobId);
+
+          return {
+            blobId: blob.blobId,
+            dataType: blob.dataType,
+            uploadedAt: blob.uploadedAt,
+            uploaderAddress: blob.uploaderAddress,
+            metadata: walrusBlob.metadata,
+          };
+        } catch (error) {
+          console.error(`Failed to fetch metadata for blob ${blob.blobId}:`, error);
+          // Return the on-chain data as a fallback
+          return {
+            blobId: blob.blobId,
+            dataType: blob.dataType,
+            uploadedAt: blob.uploadedAt,
+            uploaderAddress: blob.uploaderAddress,
+            metadata: {
+              filename: 'Error reading filename',
+            },
+          };
+        }
+      })
+    );
+
     // Format response
     return NextResponse.json(
       {
         dealId,
         periodId,
-        blobs: blobs.map(blob => ({
-          blobId: blob.blobId,
-          dataType: blob.dataType,
-          uploadedAt: blob.uploadedAt,
-          uploaderAddress: blob.uploaderAddress,
-        })),
-        total: blobs.length,
+        blobs: blobsWithMetadata,
+        total: blobsWithMetadata.length,
       },
       { status: 200 }
     );

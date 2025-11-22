@@ -10,6 +10,14 @@ export interface PeriodBlobReference {
   dataType: string;
   uploadedAt: string;
   uploaderAddress: string;
+  metadata?: {
+    filename?: string;
+    description?: string;
+    dataType?: string;
+    customDataType?: string;
+    periodId?: string;
+    mimeType?: string;
+  };
 }
 
 export interface PeriodBlobsResponse {

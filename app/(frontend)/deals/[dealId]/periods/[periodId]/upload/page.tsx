@@ -569,37 +569,42 @@ export default function DocumentsPage() {
                 ) : (
                   <div className="space-y-3">
                     {/* Existing blobs from blockchain */}
-                    {existingBlobs.map((blob) => (
-                      <div
-                        key={blob.blobId}
-                        className="p-4 rounded-lg border bg-muted/30"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-3 flex-1">
-                            <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{blob.dataType}</p>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                <span title={blob.blobId}>
-                                  Blob ID: {blob.blobId.substring(0, 8)}...
-                                </span>
-                                <span>{formatDate(blob.uploadedAt)}</span>
+                    {existingBlobs.map((blob) => {
+                      const filename = blob.metadata?.filename || blob.metadata?.customDataType || blob.dataType;
+                      return (
+                        <div
+                          key={blob.blobId}
+                          className="p-4 rounded-lg border bg-muted/30"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-3 flex-1">
+                              <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{filename}</p>
+                                {blob.metadata?.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{blob.metadata.description}</p>
+                                )}
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <span title={blob.blobId}>
+                                    Blob ID: {blob.blobId.substring(0, 8)}...
+                                  </span>
+                                  <span>{formatDate(blob.uploadedAt)}</span>
+                                </div>
                               </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownload(blob.blobId, filename)}
+                              disabled={downloadingBlobId === blob.blobId}
+                            >
+                              {downloadingBlobId === blob.blobId ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4" />
+                              )}
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDownload(blob.blobId, blob.dataType)}
-                            disabled={downloadingBlobId === blob.blobId}
-                          >
-                            {downloadingBlobId === blob.blobId ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Download className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
 
                         {/* Status Badge - Note: Audit status not yet integrated */}
                         <div className="mb-2">
@@ -611,7 +616,8 @@ export default function DocumentsPage() {
                           Uploaded by: {blob.uploaderAddress.substring(0, 8)}...{blob.uploaderAddress.substring(blob.uploaderAddress.length - 6)}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
 
                     {/* Newly uploaded files (session only) */}
                     {uploadedFiles.map((file, index) => (
