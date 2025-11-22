@@ -103,6 +103,22 @@ components:
               description: ID of the resource that was not found
               example: "0x123abc..."
 
+    ConflictError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              type: string
+              enum: ["ConflictError"]
+            statusCode:
+              type: integer
+              enum: [409]
+            conflictReason:
+              type: string
+              description: Reason for the conflict
+              example: "Period already settled"
+
     PaginationParams:
       type: object
       properties:
