@@ -98,25 +98,25 @@ export class SuiService {
 
       const fields = content.fields as Record<string, unknown>;
 
-      // Extract periods array from Deal
-      // Move struct: Deal { periods: vector<Period> }
-      const periods = fields.periods as Array<{
+      // Extract subperiods array from Deal
+      // Move struct: Deal { subperiods: vector<Subperiod> }
+      const subperiods = fields.subperiods as Array<{
         fields?: {
           walrus_blobs?: Array<{ fields?: { blob_id?: string } }>;
         };
       }> | undefined;
 
-      if (!periods || !Array.isArray(periods)) {
+      if (!subperiods || !Array.isArray(subperiods)) {
         if (debugConfig.sui) {
-          console.log('No periods field found in Deal object, returning empty list');
+          console.log('No subperiods field found in Deal object, returning empty list');
         }
         return [];
       }
 
-      // Extract blob IDs from all periods
+      // Extract blob IDs from all subperiods
       const blobIds: string[] = [];
-      for (const period of periods) {
-        const walrusBlobs = period.fields?.walrus_blobs;
+      for (const subperiod of subperiods) {
+        const walrusBlobs = subperiod.fields?.walrus_blobs;
         if (walrusBlobs && Array.isArray(walrusBlobs)) {
           for (const blob of walrusBlobs) {
             const blobId = blob.fields?.blob_id;
@@ -141,13 +141,129 @@ export class SuiService {
   }
 
   /**
+   * Query blob references for a specific subperiod
+   *
+   * Returns full blob reference data for a given subperiod
+   *
+   * Move struct hierarchy:
+   *   Deal { subperiods: vector<Subperiod> }
+   *   Subperiod { id: String, walrus_blobs: vector<WalrusBlobRef> }
+   *   WalrusBlobRef { blob_id, data_type, uploaded_at, uploader }
+   *
+   * @param dealId - Deal object ID on Sui
+   * @param subperiodId - Subperiod ID (e.g., "2025-11", "2025-Q4")
+   * @returns Array of on-chain blob references for the subperiod
+   */
+  async getSubperiodBlobReferences(dealId: string, subperiodId: string): Promise<OnChainBlobReference[]> {
+    try {
+      if (debugConfig.sui) {
+        console.log('Querying blob references for deal:', dealId, 'subperiod:', subperiodId);
+      }
+
+      // Check if earnout package is configured
+      if (!config.earnout.packageId) {
+        console.warn('EARNOUT_PACKAGE_ID not configured, cannot query on-chain blobs');
+        return [];
+      }
+
+      // Fetch the Deal object from blockchain
+      const dealObject = await this.client.getObject({
+        id: dealId,
+        options: {
+          showContent: true,
+          showType: true,
+        },
+      });
+
+      if (!dealObject.data) {
+        throw new Error(`Deal not found: ${dealId}`);
+      }
+
+      const content = dealObject.data.content;
+      if (!content || content.dataType !== 'moveObject') {
+        throw new Error('Invalid Deal object structure');
+      }
+
+      const fields = content.fields as Record<string, unknown>;
+
+      // Extract subperiods array from Deal
+      // Move struct: Deal { subperiods: vector<Subperiod> }
+      const subperiods = fields.subperiods as Array<{
+        fields?: {
+          id?: string;
+          walrus_blobs?: Array<{
+            fields?: {
+              blob_id?: string;
+              data_type?: string;
+              uploaded_at?: string;
+              uploader?: string;
+            };
+          }>;
+        };
+      }> | undefined;
+
+      if (!subperiods || !Array.isArray(subperiods)) {
+        if (debugConfig.sui) {
+          console.log('No subperiods field found in Deal object, returning empty list');
+        }
+        return [];
+      }
+
+      // Find the specific subperiod
+      const targetSubperiod = subperiods.find(
+        sp => sp.fields?.id === subperiodId
+      );
+
+      if (!targetSubperiod) {
+        if (debugConfig.sui) {
+          console.log(`Subperiod ${subperiodId} not found in deal ${dealId}`);
+        }
+        return [];
+      }
+
+      const walrusBlobs = targetSubperiod.fields?.walrus_blobs;
+      if (!walrusBlobs || !Array.isArray(walrusBlobs)) {
+        return [];
+      }
+
+      // Extract blob references
+      const blobReferences: OnChainBlobReference[] = [];
+      for (const blob of walrusBlobs) {
+        const blobFields = blob.fields;
+        if (blobFields) {
+          blobReferences.push({
+            blobId: blobFields.blob_id || '',
+            periodId: subperiodId,
+            dataType: blobFields.data_type || '',
+            uploadedAt: blobFields.uploaded_at
+              ? new Date(parseInt(blobFields.uploaded_at)).toISOString()
+              : new Date().toISOString(),
+            uploaderAddress: blobFields.uploader || '',
+          });
+        }
+      }
+
+      if (debugConfig.sui) {
+        console.log(`Found ${blobReferences.length} blob references for subperiod ${subperiodId}`);
+      }
+
+      return blobReferences;
+    } catch (error) {
+      console.error('Failed to query subperiod blob references:', error);
+      throw new Error(
+        `Failed to query on-chain blob data: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
    * Query detailed blob references for a deal
    *
    * Returns full blob reference data including period, data type, etc.
    *
    * Move struct hierarchy:
-   *   Deal { periods: vector<Period> }
-   *   Period { id: String, walrus_blobs: vector<WalrusBlobRef> }
+   *   Deal { subperiods: vector<Subperiod> }
+   *   Subperiod { id: String, walrus_blobs: vector<WalrusBlobRef> }
    *   WalrusBlobRef { blob_id, data_type, uploaded_at, uploader }
    *
    * @param dealId - Deal object ID on Sui
@@ -185,9 +301,9 @@ export class SuiService {
 
       const fields = content.fields as Record<string, unknown>;
 
-      // Extract periods array from Deal
-      // Move struct: Deal { periods: vector<Period> }
-      const periods = fields.periods as Array<{
+      // Extract subperiods array from Deal
+      // Move struct: Deal { subperiods: vector<Subperiod> }
+      const subperiods = fields.subperiods as Array<{
         fields?: {
           id?: string;
           walrus_blobs?: Array<{
@@ -201,18 +317,18 @@ export class SuiService {
         };
       }> | undefined;
 
-      if (!periods || !Array.isArray(periods)) {
+      if (!subperiods || !Array.isArray(subperiods)) {
         if (debugConfig.sui) {
-          console.log('No periods field found in Deal object, returning empty list');
+          console.log('No subperiods field found in Deal object, returning empty list');
         }
         return [];
       }
 
-      // Extract blob references from all periods
+      // Extract blob references from all subperiods
       const blobReferences: OnChainBlobReference[] = [];
-      for (const period of periods) {
-        const periodId = period.fields?.id || '';
-        const walrusBlobs = period.fields?.walrus_blobs;
+      for (const subperiod of subperiods) {
+        const subperiodId = subperiod.fields?.id || '';
+        const walrusBlobs = subperiod.fields?.walrus_blobs;
 
         if (walrusBlobs && Array.isArray(walrusBlobs)) {
           for (const blob of walrusBlobs) {
@@ -220,7 +336,7 @@ export class SuiService {
             if (blobFields) {
               blobReferences.push({
                 blobId: blobFields.blob_id || '',
-                periodId: periodId,  // Derived from parent Period
+                periodId: subperiodId,  // Derived from parent Subperiod
                 dataType: blobFields.data_type || '',
                 uploadedAt: blobFields.uploaded_at
                   ? new Date(parseInt(blobFields.uploaded_at)).toISOString()

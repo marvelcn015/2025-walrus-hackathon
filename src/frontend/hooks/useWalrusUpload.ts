@@ -121,20 +121,20 @@ export function useWalrusUpload(): UseWalrusUploadReturn {
         if (enableEncryption) {
           toast.loading('Encrypting file...', { id: 'walrus-upload' });
 
-          const whitelistObjectId = process.env.NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID;
           const packageId = process.env.NEXT_PUBLIC_EARNOUT_PACKAGE_ID;
 
-          if (!packageId || !whitelistObjectId) {
+          if (!packageId) {
             throw new Error(
-              'Seal encryption is not configured. Please set NEXT_PUBLIC_SEAL_PACKAGE_ID and NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID.'
+              'Seal encryption is not configured. Please set NEXT_PUBLIC_SEAL_PACKAGE_ID.'
             );
           }
 
           // Encrypt data using Seal (client-side)
+          // The dealId is used as the access control policy object.
           const encryptedBuffer = await encryptData(
             suiClient,
             fileBuffer,
-            whitelistObjectId,
+            dealId, // Use dealId as the whitelistObjectId
             packageId
           );
 
@@ -268,7 +268,7 @@ export function useWalrusUpload(): UseWalrusUploadReturn {
         setIsUploading(false);
       }
     },
-    [currentAccount?.address, suiClient, signPersonalMessage, signAndExecuteTransaction]
+    [currentAccount, suiClient, signPersonalMessage, signAndExecuteTransaction]
   );
 
   return {

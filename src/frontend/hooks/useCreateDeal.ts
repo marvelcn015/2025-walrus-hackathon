@@ -218,7 +218,7 @@ export function useCreateDeal(): UseCreateDealReturn {
         setIsCreating(false);
       }
     },
-    [currentAccount?.address, signPersonalMessage, signAndExecuteTransaction]
+    [currentAccount, signPersonalMessage, signAndExecuteTransaction]
   );
 
   return {

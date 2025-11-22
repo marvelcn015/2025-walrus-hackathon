@@ -100,7 +100,7 @@ export async function encryptData(
 export async function decryptData(
   suiClient: SuiClient,
   encryptedData: ArrayBuffer | Uint8Array,
-  whitelistObjectId: string,
+  dealId: string,
   packageId: string,
   userAddress: string,
   signPersonalMessage: (input: { message: Uint8Array }) => Promise<{ signature: string; bytes: string; }>
@@ -133,16 +133,16 @@ export async function decryptData(
     // Set the signature on the session key
     await sessionKey.setPersonalMessageSignature(signature);
 
-    // Build an approval transaction that calls the `seal_approve` function in the whitelist contract.
+    // Build an approval transaction that calls the `seal_approve` function in the earnout contract.
     // This transaction is not executed on-chain; it's sent to the key servers for verification.
     const tx = new Transaction();
     tx.moveCall({
-      target: `${packageId}::whitelist::seal_approve`,
+      target: `${packageId}::earnout::seal_approve`,
       arguments: [
         // The key-id bytes (without the package prefix).
         tx.pure.vector('u8', Array.from(fromHex(encryptedKeyId))),
-        // A reference to the Whitelist object.
-        tx.object(whitelistObjectId),
+        // A reference to the Deal object.
+        tx.object(dealId),
       ],
     });
 

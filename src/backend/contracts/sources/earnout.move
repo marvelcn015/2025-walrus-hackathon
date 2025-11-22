@@ -5,7 +5,6 @@ module contracts::earnout {
     use sui::ed25519;
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use contracts::whitelist::{Self, Whitelist, Cap as WhitelistCap};
 
     // --- Error Codes ---
 
@@ -21,7 +20,7 @@ module contracts::earnout {
     const EAlreadySettled: u64 = 11;
     const EParametersNotSet: u64 = 12;
     const EInsufficientPayment: u64 = 14;
-
+    const ENoSealAccess: u64 = 15;
 
     // --- Structs ---
 
@@ -30,6 +29,8 @@ module contracts::earnout {
     /// Design: A Deal has ONE continuous earn-out period with cumulative KPI tracking.
     /// The period is divided into multiple subperiods for document organization.
     /// KPI values accumulate across subperiods, and settlement happens once at the end.
+    /// Access Control: The buyer, seller, and auditor addresses stored in this struct
+    /// are used directly for Seal encryption access control via the seal_approve function.
     public struct Deal has key, store {
         id: UID,
         name: String,
@@ -51,10 +52,8 @@ module contracts::earnout {
         is_settled: bool,
         settled_amount: u64,
 
-        // Access control
+        // Parameters
         parameters_locked: bool,
-        whitelist_id: ID,
-        whitelist_cap: WhitelistCap,
     }
 
     /// Subperiod for organizing documents within the earn-out period
@@ -151,9 +150,13 @@ module contracts::earnout {
     Create a new earn-out deal.
 
     Sui Integration:
-    - Creates new Deal object
-    - Creates and shares Whitelist for Seal encryption access control
+    - Creates new Deal object with buyer/seller/auditor for Seal access control
     - Emits DealCreated event
+
+    Access Control:
+    - The buyer, seller, and auditor addresses are stored directly in the Deal
+    - These addresses are used by seal_approve for Seal encryption access control
+    - No separate Whitelist object needed
     */
     public fun create_deal(
         name: String,
@@ -170,24 +173,12 @@ module contracts::earnout {
     ) {
         let buyer = tx_context::sender(ctx);
 
-        // Assertions for new parameters
+        // Validate subperiod parameters
         let len = vector::length(&subperiod_ids);
         assert!(vector::length(&subperiod_start_dates) == len, EMismatchLength);
         assert!(vector::length(&subperiod_end_dates) == len, EMismatchLength);
 
-        // 1. Create Whitelist for Seal access control
-        let (wl_cap, mut wl) = whitelist::create_whitelist(ctx);
-        let wl_id = object::id(&wl);
-
-        // 2. Add all parties to whitelist
-        whitelist::add(&mut wl, &wl_cap, buyer);
-        whitelist::add(&mut wl, &wl_cap, seller);
-        whitelist::add(&mut wl, &wl_cap, auditor);
-
-        // 3. Share Whitelist
-        whitelist::share_whitelist(wl);
-
-        // 4. Create Deal with all parameters set and locked
+        // Create Deal with all parameters set and locked
         let mut deal = Deal {
             id: object::new(ctx),
             name,
@@ -203,10 +194,9 @@ module contracts::earnout {
             is_settled: false,
             settled_amount: 0,
             parameters_locked: true,
-            whitelist_id: wl_id,
-            whitelist_cap: wl_cap,
         };
 
+        // Create subperiods
         let mut i = 0;
         while (i < len) {
             let subperiod = Subperiod {
@@ -219,9 +209,11 @@ module contracts::earnout {
             i = i + 1;
         };
 
+        let deal_id = object::id(&deal);
+
         event::emit(DealCreated {
-            deal_id: object::id(&deal),
-            whitelist_id: wl_id,
+            deal_id,
+            whitelist_id: deal_id, // Use deal_id instead of whitelist_id for backward compatibility
             buyer,
             start_date,
         });
@@ -231,18 +223,17 @@ module contracts::earnout {
 
 
 
+    /// Change the auditor of a Deal
+    ///
+    /// Only the buyer can change the auditor.
+    /// The new auditor will have access to decrypt all files encrypted with this Deal's ID.
     public fun change_auditor(
         deal: &mut Deal,
-        wl: &mut Whitelist,
         new_auditor: address,
         ctx: &mut TxContext
     ) {
         assert!(tx_context::sender(ctx) == deal.buyer, ENotAuthorized);
-        assert!(object::id(wl) == deal.whitelist_id, ENotAuthorized);
-
-        whitelist::remove(wl, &deal.whitelist_cap, deal.auditor);
         deal.auditor = new_auditor;
-        whitelist::add(wl, &deal.whitelist_cap, new_auditor);
     }
 
     // --- Data Upload Functions ---
@@ -505,6 +496,51 @@ module contracts::earnout {
             kpi_met,
             payout_amount,
         });
+    }
+
+    // --- Seal Access Control ---
+
+    /// Seal access control function for Deal-based encryption
+    ///
+    /// This function is called by Seal Key Servers to verify decryption access.
+    /// Access is granted to the buyer, seller, or auditor of the Deal.
+    ///
+    /// The key-id format from Seal SDK is: [packageId (32 bytes)][dealId (32 bytes)]
+    /// We verify that bytes 32-63 match the Deal object ID.
+    ///
+    /// Arguments:
+    /// - id: The key-id being requested (format: packageId + dealId)
+    /// - deal: Reference to the Deal controlling access
+    /// - ctx: Transaction context (provides sender address)
+    ///
+    /// Aborts with ENoSealAccess if the caller is not a Deal participant.
+    entry fun seal_approve(id: vector<u8>, deal: &Deal, ctx: &TxContext) {
+        let sender = tx_context::sender(ctx);
+
+        // Seal SDK key-id format: [packageId (32 bytes)][dealId (32 bytes)]
+        // We need to verify that bytes 32-63 match the Deal object ID
+        let deal_id_bytes = object::id_to_bytes(&object::id(deal));
+        let package_id_length = 32u64; // Package ID is always 32 bytes
+
+        // Verify the key-id is long enough (must be at least 64 bytes: packageId + dealId)
+        if (vector::length(&id) < package_id_length + vector::length(&deal_id_bytes)) {
+            abort ENoSealAccess
+        };
+
+        // Compare bytes starting from offset 32 (after package ID)
+        let mut i = 0;
+        while (i < vector::length(&deal_id_bytes)) {
+            let key_id_byte = *vector::borrow(&id, package_id_length + i);
+            let deal_id_byte = *vector::borrow(&deal_id_bytes, i);
+            if (key_id_byte != deal_id_byte) {
+                abort ENoSealAccess
+            };
+            i = i + 1;
+        };
+
+        // Check if sender is buyer, seller, or auditor
+        let has_access = sender == deal.buyer || sender == deal.seller || sender == deal.auditor;
+        assert!(has_access, ENoSealAccess);
     }
 
     // --- Accessor Functions ---

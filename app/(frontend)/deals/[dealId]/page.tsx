@@ -2,7 +2,6 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { useRole } from '@/src/frontend/contexts/RoleContext';
 import { useDashboard, usePendingActions } from '@/src/frontend/hooks/useDashboard';
 import { DealInfoSection } from '@/src/frontend/components/features/deals/DealInfoSection';
 import { PeriodCard } from '@/src/frontend/components/features/deals/PeriodCard';
@@ -10,14 +9,13 @@ import { WalletButton } from '@/src/frontend/components/wallet/WalletButton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Wallet, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Loader2, Wallet, ArrowLeft, AlertCircle, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DealDashboardPage() {
   const params = useParams();
   const router = useRouter();
   const currentAccount = useCurrentAccount();
-  const { currentRole } = useRole();
   const dealId = params.dealId as string;
 
   const { data: dashboard, isLoading, error } = useDashboard(dealId);
@@ -126,6 +124,17 @@ export default function DealDashboardPage() {
                   Deal ID: {dealInfo.dealId.slice(0, 8)}...{dealInfo.dealId.slice(-6)}
                 </span>
               </div>
+            </div>
+
+            {/* View All Documents Button */}
+            <div className="flex items-center">
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/deals/${dealId}/blobs`)}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                View All Documents
+              </Button>
             </div>
           </div>
 

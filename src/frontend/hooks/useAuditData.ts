@@ -147,7 +147,7 @@ export function useAuditData(): UseAuditDataReturn {
         setIsAuditing(false);
       }
     },
-    [currentAccount?.address, signPersonalMessage, signAndExecuteTransaction]
+    [currentAccount, signPersonalMessage, signAndExecuteTransaction]
   );
 
   return {

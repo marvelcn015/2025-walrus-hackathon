@@ -19,6 +19,7 @@ interface UploadedFile {
 interface UploadedFilesListProps {
   files: UploadedFile[];
   onDelete?: (index: number) => void;
+  dealId: string;
 }
 
 type DownloadStatus = 'idle' | 'downloading' | 'error';
@@ -26,6 +27,7 @@ type DownloadStatus = 'idle' | 'downloading' | 'error';
 export function UploadedFilesList({
   files,
   onDelete,
+  dealId,
 }: UploadedFilesListProps) {
   const [downloadStatus, setDownloadStatus] = useState<Record<number, DownloadStatus>>({});
   const [downloadError, setDownloadError] = useState<Record<number, string | null>>({});
@@ -44,7 +46,24 @@ export function UploadedFilesList({
     setDownloadError(prev => ({ ...prev, [index]: null }));
 
     try {
-      const response = await fetch(`/api/v1/walrus/download/${blobId}`);
+      // Create authentication message (ISO timestamp format)
+      const message = new Date().toISOString();
+
+      // Sign message with wallet
+      const signatureResult = await signPersonalMessage({
+        message: new TextEncoder().encode(message),
+      });
+
+      // Fetch encrypted file from API with authentication headers
+      const response = await fetch(`/api/v1/walrus/download/${blobId}?dealId=${dealId}`, {
+        method: 'GET',
+        headers: {
+          'X-Sui-Address': currentAccount.address,
+          'X-Sui-Signature': signatureResult.signature,
+          'X-Sui-Signature-Message': message,
+        },
+      });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to download file');
@@ -53,22 +72,16 @@ export function UploadedFilesList({
       const encryptedBuffer = await response.arrayBuffer();
 
       // Get Seal configuration from environment
-const UploadedFilesList = ({ dealId, periodId, files, onFileDeleted }: UploadedFilesListProps) => {
-  const { address } = useWallet();
-  const whitelistObjectId = process.env.NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID;
-  const packageId = process.env.NEXT_PUBLIC_EARNOUT_PACKAGE_ID;
-  const [isDecrypting, setIsDecrypting] = useState<Record<string, boolean>>({});
-  const [decryptedUrl, setDecryptedUrl] = useState<Record<string, string>>({});
-      const whitelistObjectId = process.env.NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID;
+      const packageId = process.env.NEXT_PUBLIC_EARNOUT_PACKAGE_ID;
 
-      if (!packageId || !whitelistObjectId) {
-        throw new Error('Seal decryption is not configured. Please set NEXT_PUBLIC_SEAL_PACKAGE_ID and NEXT_PUBLIC_SEAL_POLICY_OBJECT_ID.');
+      if (!packageId) {
+        throw new Error('Seal decryption is not configured. Please set NEXT_PUBLIC_SEAL_PACKAGE_ID.');
       }
 
       const decryptedBuffer = await decryptData(
         suiClient,
         encryptedBuffer,
-        whitelistObjectId,
+        dealId,
         packageId,
         currentAccount.address,
         signPersonalMessage

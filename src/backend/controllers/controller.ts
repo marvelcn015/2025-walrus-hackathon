@@ -25,7 +25,7 @@ import type {
   ListDealBlobsQuery,
   DealBlobItem,
 } from '@/src/shared/types/walrus';
-import type { WhitelistEncryptionConfig } from '@/src/backend/services/seal-service';
+import type { DealEncryptionConfig } from '@/src/backend/services/seal-service';
 
 /**
  * Walrus Controller for file operations
@@ -239,23 +239,23 @@ export class WalrusController {
         }
 
         // Validate required config
-        if (!config.seal.policyObjectId || !config.earnout.packageId) {
+        if (!config.earnout.packageId) {
           return NextResponse.json(
             {
               error: 'ConfigurationError',
               message: 'Seal configuration is incomplete',
               statusCode: 500,
               details: {
-                reason: 'SEAL_POLICY_OBJECT_ID and EARNOUT_PACKAGE_ID must be set for server-side encryption',
+                reason: 'EARNOUT_PACKAGE_ID must be set for server-side encryption',
               },
             },
             { status: 500 }
           );
         }
 
-        // Encrypt file using Seal with whitelist-based access control
-        const encryptionConfig: WhitelistEncryptionConfig = {
-          whitelistObjectId: config.seal.policyObjectId,
+        // Encrypt file using Seal with Deal-based access control
+        const encryptionConfig: DealEncryptionConfig = {
+          dealId,
           packageId: config.earnout.packageId,
         };
 

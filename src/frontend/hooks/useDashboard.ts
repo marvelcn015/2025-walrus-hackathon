@@ -95,7 +95,7 @@ export function useDashboard(dealId: string) {
       // User rejected or error occurred
       return null;
     }
-  }, [currentAccount?.address, signPersonalMessage]);
+  }, [currentAccount, signPersonalMessage]);
 
   return useQuery<DashboardResponse>({
     queryKey: dashboardKeys.detail(dealId),

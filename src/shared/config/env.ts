@@ -121,11 +121,6 @@ export const sealConfig = {
   keyServerUrl: getEnvVar('SEAL_KEY_SERVER_URL', 'https://seal-keyserver-testnet.sui.io'),
 
   /**
-   * Seal Policy Object ID (Whitelist object ID for access control)
-   */
-  policyObjectId: getOptionalEnvVar('SEAL_POLICY_OBJECT_ID', ''),
-
-  /**
    * Seal encryption mode: frontend, backend, or hybrid
    */
   encryptionMode: getOptionalEnvVar('SEAL_ENCRYPTION_MODE', 'hybrid') as 'frontend' | 'backend' | 'hybrid',
@@ -218,11 +213,6 @@ export function validateConfig(): void {
   if (appConfig.enableServerEncryption) {
     if (!sealConfig.keyServerUrl) {
       errors.push('SEAL_KEY_SERVER_URL is required when server encryption is enabled');
-    }
-    if (!sealConfig.policyObjectId) {
-      console.warn(
-        'WARNING: SEAL_POLICY_OBJECT_ID is not set. Server encryption will not work until Seal policy is deployed.'
-      );
     }
   }
 
