@@ -432,7 +432,7 @@ export class SuiService {
           const fields = content.fields as {
             data_id?: string;
             deal_id?: string;
-            period_id?: string;
+            subperiod_id?: string;
             uploader?: string;
             upload_timestamp?: string;
             audited?: boolean;
@@ -444,7 +444,7 @@ export class SuiService {
             id: recordId,
             dataId: fields.data_id || '',
             dealId: fields.deal_id || '',
-            periodId: fields.period_id || '',
+            periodId: fields.subperiod_id || '',
             uploader: fields.uploader || '',
             uploadTimestamp: fields.upload_timestamp ? parseInt(fields.upload_timestamp) : 0,
             audited: fields.audited || false,

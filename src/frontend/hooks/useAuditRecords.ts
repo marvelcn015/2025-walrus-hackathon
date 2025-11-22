@@ -52,7 +52,6 @@ export function useAuditRecords(options: UseAuditRecordsOptions): UseAuditRecord
 
       // Sign authentication headers
       const timestamp = new Date().toISOString();
-      const message = new TextEncoder().encode(timestamp);
 
       // For now, we'll use a placeholder signature
       // In production, this should use wallet signing

@@ -54,7 +54,6 @@ export class WalrusController {
     blobId: string,
     periodId: string,
     dataType: string,
-    size: number,
     uploaderAddress: string
   ): Promise<{ txBytes: string; includesAuditRecord: boolean }> {
     // Check if earnout package is configured
@@ -296,7 +295,6 @@ export class WalrusController {
           uploadResult.blobId,
           periodId,
           dataType,
-          uploadResult.size,
           userAddress
         );
         txBytes = result.txBytes;

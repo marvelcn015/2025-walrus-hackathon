@@ -5,6 +5,7 @@ module contracts::earnout {
     use sui::ed25519;
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
+    use sui::hash;
 
     // --- Error Codes ---
 
@@ -373,8 +374,26 @@ module contracts::earnout {
         vector::append(&mut message, b"AUDIT:");
         vector::append(&mut message, *audit_record.data_id.as_bytes());
 
-        // Verify ed25519 signature
-        let is_valid = ed25519::ed25519_verify(&signature, &public_key, &message);
+        // Sui PersonalMessage signing process:
+        // 1. Wallet builds: intent_message = [3, 0, 0] + raw_message
+        // 2. Wallet computes: hash = Blake2b-256(intent_message) -> 32 bytes
+        // 3. Wallet performs: signature = Ed25519_sign(private_key, hash)
+        //
+        // The wallet signs the 32-byte HASH, not the original message.
+        // Therefore, ed25519_verify must receive the same 32-byte hash as input.
+        //
+        // Build the same intent message the wallet used:
+        let mut intent_message = vector::empty<u8>();
+        vector::push_back(&mut intent_message, 3u8);  // PersonalMessage scope
+        vector::push_back(&mut intent_message, 0u8);  // V0 version
+        vector::push_back(&mut intent_message, 0u8);  // Sui app_id
+        vector::append(&mut intent_message, message);
+
+        // Compute the same hash the wallet used before signing
+        let message_hash = hash::blake2b256(&intent_message);
+
+        // Verify the Ed25519 signature against the hash (the actual signed data)
+        let is_valid = ed25519::ed25519_verify(&signature, &public_key, &message_hash);
         assert!(is_valid, EInvalidSignature);
 
         // Update audit record

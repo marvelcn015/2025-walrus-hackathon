@@ -172,6 +172,7 @@ export default function DataAuditPage() {
       dealId,
       auditRecordId: record.auditStatus.auditRecordId,
       blobId: record.blobId,
+      periodId, // Pass periodId to the hook
       onSuccess: () => {
         refetch();
       },

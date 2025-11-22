@@ -49,31 +49,65 @@ export async function GET(
     // Query blobs from blockchain
     const blobs = await suiService.getSubperiodBlobReferences(dealId, periodId);
 
-    // Fetch metadata from Walrus for each blob
+    // Fetch audit records for this deal
+    const auditRecords = await suiService.getDealAuditRecords(dealId);
+
+    // Create a map of blob ID to audit record for quick lookup
+    const auditRecordMap = new Map(
+      auditRecords
+        .filter(record => record.periodId === periodId) // Only include records for this period
+        .map(record => [record.dataId, record])
+    );
+
+    // Fetch metadata from Walrus for each blob and add audit status
     const blobsWithMetadata = await Promise.all(
       blobs.map(async (blob) => {
         try {
           // Download blob from Walrus to extract metadata
           const walrusBlob = await walrusService.download(blob.blobId);
 
+          // Get audit status for this blob
+          const auditRecord = auditRecordMap.get(blob.blobId);
+
           return {
             blobId: blob.blobId,
             dataType: blob.dataType,
+            periodId: blob.periodId,
             uploadedAt: blob.uploadedAt,
             uploaderAddress: blob.uploaderAddress,
             metadata: walrusBlob.metadata,
+            size: walrusBlob.data.length,
+            downloadUrl: `/api/v1/walrus/download/${blob.blobId}?dealId=${dealId}`,
+            auditStatus: auditRecord ? {
+              auditRecordId: auditRecord.id,
+              audited: auditRecord.audited,
+              auditTimestamp: auditRecord.auditTimestamp,
+              auditor: auditRecord.auditor,
+            } : undefined,
           };
         } catch (error) {
           console.error(`Failed to fetch metadata for blob ${blob.blobId}:`, error);
+
+          // Get audit status for this blob even if metadata fetch fails
+          const auditRecord = auditRecordMap.get(blob.blobId);
+
           // Return the on-chain data as a fallback
           return {
             blobId: blob.blobId,
             dataType: blob.dataType,
+            periodId: blob.periodId,
             uploadedAt: blob.uploadedAt,
             uploaderAddress: blob.uploaderAddress,
             metadata: {
               filename: 'Error reading filename',
             },
+            downloadUrl: `/api/v1/walrus/download/${blob.blobId}?dealId=${dealId}`,
+            auditStatus: auditRecord ? {
+              auditRecordId: auditRecord.id,
+              audited: auditRecord.audited,
+              auditTimestamp: auditRecord.auditTimestamp,
+              auditor: auditRecord.auditor,
+            } : undefined,
           };
         }
       })
