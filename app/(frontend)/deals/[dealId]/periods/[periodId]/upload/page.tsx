@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage } from '@mysten/dapp-kit';
-import { useRole } from '@/src/frontend/contexts/RoleContext';
+import { useDealRole } from '@/src/frontend/hooks/useDealRole';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -77,9 +77,9 @@ export default function DocumentsPage() {
   const params = useParams();
   const router = useRouter();
   const currentAccount = useCurrentAccount();
-  const { currentRole } = useRole();
   const dealId = params.dealId as string;
   const periodId = params.periodId as string;
+  const currentRole = useDealRole(dealId); // Auto-detect role from wallet address
   const { data: dashboard, isLoading } = useDashboard(dealId);
   const { upload: uploadToWalrus, isUploading } = useWalrusUpload();
   const { data: periodBlobsData, isLoading: isBlobsLoading } = usePeriodBlobs(dealId, periodId);
@@ -96,6 +96,13 @@ export default function DocumentsPage() {
     blobId: '',
     filename: '',
   });
+
+  // Redirect auditor to audit page
+  useEffect(() => {
+    if (currentRole === 'auditor') {
+      router.replace(`/deals/${dealId}/periods/${periodId}/audit`);
+    }
+  }, [currentRole, dealId, periodId, router]);
 
   const form = useForm<UploadFormData>({
     resolver: zodResolver(uploadSchema),
