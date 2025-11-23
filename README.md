@@ -370,16 +370,16 @@ const attestation = sign(kpi, teePrivateKey); // 144 bytes
 
 Deployed on **Sui Testnet**:
 
-- **Package ID**: ``
+- **Package ID**: [`0x30ca8192f274777941cd23377b6f68cbf6d4b5ab036661532870f9b0088d230a`](https://suiscan.xyz/testnet/object/0x30ca8192f274777941cd23377b6f68cbf6d4b5ab036661532870f9b0088d230a/tx-blocks)
 - **Module**: `earnout`
 
 Key functions:
 
 - `create_deal`: Initialize earn-out agreement
 - `add_walrus_blob`: Register Walrus blob ID on-chain
-- `propose_kpi`: Buyer proposes KPI value
-- `attest_kpi`: Auditor verifies and approves KPI
-- `execute_settlement`: Transfer funds based on attested KPI
+- `seal_approve`: Seal access control - grants decryption rights to buyer/seller/auditor
+- `audit_data`: Auditor verifies and approves blob ID
+- `submit_kpi_and_settle`: Submit KPI result with TEE attestation and execute settlement
 
 See [Contract README](./src/backend/contracts/README.md) for deployment guide.
 
@@ -392,14 +392,6 @@ See [Contract README](./src/backend/contracts/README.md) for deployment guide.
 3. Upload sample financial data (encrypted with Seal, stored on Walrus)
 4. View dashboard with KPI tracking
 5. Execute settlement when KPI target is met
-
-## 🔮 Future Enhancements
-
-- **Multi-TEE Consensus**: Require 2-of-3 TEE nodes to agree on KPI
-- **Advanced KPI Formulas**: Support EBITDA, gross margin, custom metrics
-- **Dispute Resolution**: On-chain arbitration mechanism
-- **Mobile App**: React Native app for on-the-go monitoring
-- **Analytics Dashboard**: Historical KPI trends and forecasting
 
 ## 📄 License
 
