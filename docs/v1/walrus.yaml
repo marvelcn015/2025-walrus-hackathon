@@ -49,21 +49,31 @@ paths:
         - Decryption keys: Managed by Seal Key Servers with blockchain verification
 
         **Next Steps After Upload**:
-        - Frontend must call a Sui transaction to register this blobId on-chain
+        - For real deal uploads: Frontend must call a Sui transaction to register this blobId on-chain
         - Transaction binds blob to specific deal/period
         - This creates immutable audit trail of data submissions
 
-        **Authentication**: Level 2 (Write)
+        **Authentication**: Tiered (based on upload type)
         - Requires: `X-Sui-Address` header only
-        - API uploads file to Walrus and returns unsigned transaction
-        - User signs transaction in wallet to register blob on-chain
-        - Transaction execution verifies user is authorized participant
+
+        **Pending Deal Uploads** (dealId: 'pending'):
+        - Level 1 (Read) authentication
+        - Used for M&A agreement uploads before deal creation
+        - No transaction returned - simple upload confirmation
+        - Frictionless UX for initial document sharing
+
+        **Real Deal Uploads** (dealId: actual deal object ID):
+        - Level 2 (Write) authentication
+        - Used for financial documents tied to specific periods
+        - Returns unsigned transaction for on-chain blob registration
+        - User signs transaction in wallet
+        - Move contract enforces access control on-chain
 
         **Security Flow**:
-        1. API validates address and uploads encrypted file to Walrus
-        2. API returns blobId and unsigned transaction bytes
-        3. User signs transaction in wallet
-        4. Transaction executes on-chain - Move contract verifies permissions
+        1. API detects upload type based on dealId parameter
+        2. Validates address and uploads encrypted file to Walrus
+        3. Returns blobId (always) and unsigned transaction (real deals only)
+        4. For real deals: User signs transaction, blockchain verifies permissions
       operationId: uploadToWalrus
       tags:
         - Walrus
@@ -109,8 +119,10 @@ paths:
                     - `server_encrypted` mode: Plaintext file (backend will encrypt)
                 dealId:
                   type: string
-                  pattern: "^0x[a-fA-F0-9]{64}$"
-                  description: Deal ID this file belongs to
+                  description: |
+                    Deal ID this file belongs to:
+                    - Use `"pending"` for M&A agreement uploads before deal creation (Level 1 auth, no transaction)
+                    - Use actual deal object ID (0x...) for financial documents (Level 2 auth, returns transaction)
                   example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
                 periodId:
                   type: string
@@ -153,34 +165,66 @@ paths:
               description: "Q1 2026 revenue journal"
       responses:
         "200":
-          description: File successfully uploaded to Walrus
+          description: |
+            File successfully uploaded to Walrus.
+
+            **Pending Deal Upload** (dealId: 'pending'):
+            - Returns blobId and metadata only
+            - No `nextStep` or `transaction` fields (simple confirmation)
+
+            **Real Deal Upload** (dealId: actual object ID):
+            - Returns blobId, metadata, AND unsigned transaction
+            - `nextStep.transaction` contains txBytes for on-chain registration
+            - Frontend must execute this transaction to complete the upload process
           content:
             application/json:
               schema:
                 $ref: "../schemas/walrus.yaml#/components/schemas/WalrusUploadResponse"
-              example:
-                blobId: "blob_2Nf8pQz3Xm7Yk5Rd9Wv1Bc6Lt4Hs"
-                commitment: "sha256:a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef12345678"
-                size: 2048576
-                uploadedAt: "2026-03-15T09:30:00Z"
-                blobReference:
-                  blobId: "blob_2Nf8pQz3Xm7Yk5Rd9Wv1Bc6Lt4Hs"
-                  dataType: "revenue_journal"
-                  uploadedAt: "2026-03-15T09:30:00Z"
-                  uploaderAddress: "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-                  size: 2048576
-                  metadata:
-                    filename: "revenue_q1_2026.csv"
-                    mimeType: "text/csv"
-                    description: "Q1 2026 revenue journal"
-                    periodId: "period_2026"
-                    encrypted: true
-                nextStep:
-                  action: "register_on_chain"
-                  description: "Sign transaction to register this blob on-chain"
-                  transaction:
-                    txBytes: "AAACAAgA..."
-                    description: "Register Walrus blob: revenue_journal for period_2026"
+              examples:
+                realDealUpload:
+                  summary: Real deal upload (with transaction)
+                  value:
+                    blobId: "blob_2Nf8pQz3Xm7Yk5Rd9Wv1Bc6Lt4Hs"
+                    commitment: "sha256:a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef12345678"
+                    size: 2048576
+                    uploadedAt: "2026-03-15T09:30:00Z"
+                    blobReference:
+                      blobId: "blob_2Nf8pQz3Xm7Yk5Rd9Wv1Bc6Lt4Hs"
+                      dataType: "revenue_journal"
+                      uploadedAt: "2026-03-15T09:30:00Z"
+                      uploaderAddress: "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+                      size: 2048576
+                      metadata:
+                        filename: "revenue_q1_2026.csv"
+                        mimeType: "text/csv"
+                        description: "Q1 2026 revenue journal"
+                        periodId: "period_2026"
+                        encrypted: true
+                    nextStep:
+                      action: "register_on_chain"
+                      description: "Sign transaction to register this blob on-chain"
+                      transaction:
+                        txBytes: "AAACAAgA..."
+                        description: "Register Walrus blob: revenue_journal for period_2026"
+                pendingDealUpload:
+                  summary: Pending deal upload (M&A agreement, no transaction)
+                  value:
+                    blobId: "blob_8Kf2pQz9Xm3Yk7Rd1Wv5Bc2Lt6Hs"
+                    commitment: "sha256:f5e4d3c2b1a098765432109876543210fedcba9876543210fedcba98765432"
+                    size: 201765
+                    uploadedAt: "2025-11-23T10:15:00Z"
+                    blobReference:
+                      blobId: "blob_8Kf2pQz9Xm3Yk7Rd1Wv5Bc2Lt6Hs"
+                      dataType: "custom"
+                      uploadedAt: "2025-11-23T10:15:00Z"
+                      uploaderAddress: "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+                      size: 201765
+                      metadata:
+                        filename: "mna_agreement.pdf"
+                        mimeType: "application/pdf"
+                        description: "M&A Agreement - TechCorp Acquisition"
+                        customDataType: "M&A Agreement"
+                        encrypted: false
         "400":
           description: Validation error
           content:

@@ -305,4 +305,152 @@ paths:
               schema:
                 $ref: '../schemas/errors.yaml#/components/schemas/NotFoundError'
 
+  /deals/{dealId}/dashboard:
+    get:
+      summary: Get dashboard data for a specific deal
+      description: |
+        **Purpose**: Get comprehensive dashboard view for a deal including periods summary, health metrics, and recent events
+
+        **Business Logic**:
+        - Aggregates deal information from Sui blockchain
+        - Provides periods summary with data upload progress and KPI/settlement status
+        - Provides health metrics and risk indicators
+        - Shows recent activity timeline
+
+        **Sui Integration**:
+        - Reads: Deal object from blockchain
+        - Reads: All Period objects for period-specific data
+        - Events: Recent blockchain events for activity feed
+        - Caching: Results cached for 30 seconds
+
+        **Authentication**: Level 1 (Read)
+        - Requires: `X-Sui-Address` header only
+        - No signature required
+        - Backend verifies user is buyer, seller, or auditor
+        - Returns 404 if deal not found or user not authorized
+
+        **Security**:
+        - Address-only authentication (frictionless UX)
+        - Backend filters by user role
+        - All data served is from public blockchain (no secrets exposed)
+      operationId: getDealDashboard
+      tags:
+        - Deal Management
+      security:
+        - Level1Auth: []
+      parameters:
+        - name: X-Sui-Address
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{64}$'
+          description: Sui wallet address
+        - name: dealId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^0x[a-fA-F0-9]{64}$'
+          description: Sui object ID of the deal
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+      responses:
+        '200':
+          description: Successfully retrieved dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/dashboard.yaml#/components/schemas/DashboardResponse'
+              example:
+                dealInfo:
+                  dealId: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+                  name: "Acquisition of TechCorp Inc."
+                  startDate: "2026-01-01"
+                  closingDate: "2025-12-31"
+                  currency: "USD"
+                  status: "active"
+                  roles:
+                    buyer: "0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+                    seller: "0xef012345678890abcdef1234567890abcdef1234567890abcdef1234567890"
+                    auditor: "0x9876543210abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+                  userRole: "buyer"
+                periodsSummary:
+                  - periodId: "period_2026_01"
+                    name: "January 2026"
+                    periodIndex: 0
+                    dateRange:
+                      start: "2026-01-01"
+                      end: "2026-01-31"
+                    dataUploadProgress:
+                      blobCount: 3
+                      lastUploadAt: "2026-02-05T14:30:00Z"
+                      completeness: 85
+                    kpiStatus: "approved"
+                    kpiValue: 1200000
+                    settlementStatus: "settled"
+                    settlementAmount: 500000
+                  - periodId: "period_2026_02"
+                    name: "February 2026"
+                    periodIndex: 1
+                    dateRange:
+                      start: "2026-02-01"
+                      end: "2026-02-28"
+                    dataUploadProgress:
+                      blobCount: 1
+                      lastUploadAt: "2026-03-10T09:15:00Z"
+                      completeness: 40
+                    kpiStatus: "proposed"
+                    kpiValue: 950000
+                    settlementStatus: "pending"
+                    nextAction:
+                      action: "upload_missing_data"
+                      actor: "seller"
+                      deadline: "2026-03-31"
+                recentEvents:
+                  - type: "kpi_approved"
+                    timestamp: "2026-02-10T16:00:00Z"
+                    actor: "0x9876543210abcdef1234567890abcdef1234567890abcdef1234567890abcd"
+                    actorRole: "auditor"
+                    description: "Auditor approved KPI for January 2026"
+                    txHash: "0xabc123def456..."
+                  - type: "data_uploaded"
+                    timestamp: "2026-02-05T14:30:00Z"
+                    actor: "0xef012345678890abcdef1234567890abcdef1234567890abcdef1234567890"
+                    actorRole: "seller"
+                    description: "Seller uploaded revenue report for January 2026"
+                healthMetrics:
+                  overallProgress: 65
+                  pendingActions: 2
+                  nextDeadline: "2026-03-31"
+                  dataCompletenessScore: 72
+                  risksDetected:
+                    - severity: "medium"
+                      category: "data_completeness"
+                      description: "February period missing expense reports"
+                      periodId: "period_2026_02"
+        '400':
+          description: Invalid deal ID format
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/errors.yaml#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/errors.yaml#/components/schemas/UnauthorizedError'
+        '404':
+          description: Deal not found or user is not a participant
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/errors.yaml#/components/schemas/NotFoundError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '../schemas/errors.yaml#/components/schemas/ErrorResponse'
+
 
