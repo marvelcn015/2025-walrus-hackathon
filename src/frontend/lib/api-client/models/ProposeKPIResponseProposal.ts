@@ -16,56 +16,97 @@ import { exists, mapValues } from '../runtime';
 /**
  * 
  * @export
- * @interface AttestKPIRequest
+ * @interface ProposeKPIResponseProposal
  */
-export interface AttestKPIRequest {
+export interface ProposeKPIResponseProposal {
     /**
-     * Whether the KPI is approved
-     * @type {boolean}
-     * @memberof AttestKPIRequest
-     */
-    approved: boolean;
-    /**
-     * Auditor's notes
+     * 
      * @type {string}
-     * @memberof AttestKPIRequest
+     * @memberof ProposeKPIResponseProposal
+     */
+    kpiType?: string;
+    /**
+     * 
+     * @type {number}
+     * @memberof ProposeKPIResponseProposal
+     */
+    value?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof ProposeKPIResponseProposal
+     */
+    unit?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof ProposeKPIResponseProposal
+     */
+    proposedBy?: string;
+    /**
+     * 
+     * @type {Date}
+     * @memberof ProposeKPIResponseProposal
+     */
+    proposedAt?: Date;
+    /**
+     * 
+     * @type {string}
+     * @memberof ProposeKPIResponseProposal
+     */
+    status?: string;
+    /**
+     * 
+     * @type {number}
+     * @memberof ProposeKPIResponseProposal
+     */
+    calculatedPayout?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof ProposeKPIResponseProposal
      */
     notes?: string;
     /**
-     * Auditor's signature
-     * @type {string}
-     * @memberof AttestKPIRequest
+     * 
+     * @type {Array<string>}
+     * @memberof ProposeKPIResponseProposal
      */
-    signature?: string;
+    supportingBlobIds?: Array<string>;
 }
 
 /**
- * Check if a given object implements the AttestKPIRequest interface.
+ * Check if a given object implements the ProposeKPIResponseProposal interface.
  */
-export function instanceOfAttestKPIRequest(value: object): boolean {
+export function instanceOfProposeKPIResponseProposal(value: object): boolean {
     let isInstance = true;
-    isInstance = isInstance && "approved" in value;
 
     return isInstance;
 }
 
-export function AttestKPIRequestFromJSON(json: any): AttestKPIRequest {
-    return AttestKPIRequestFromJSONTyped(json, false);
+export function ProposeKPIResponseProposalFromJSON(json: any): ProposeKPIResponseProposal {
+    return ProposeKPIResponseProposalFromJSONTyped(json, false);
 }
 
-export function AttestKPIRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): AttestKPIRequest {
+export function ProposeKPIResponseProposalFromJSONTyped(json: any, ignoreDiscriminator: boolean): ProposeKPIResponseProposal {
     if ((json === undefined) || (json === null)) {
         return json;
     }
     return {
         
-        'approved': json['approved'],
+        'kpiType': !exists(json, 'kpiType') ? undefined : json['kpiType'],
+        'value': !exists(json, 'value') ? undefined : json['value'],
+        'unit': !exists(json, 'unit') ? undefined : json['unit'],
+        'proposedBy': !exists(json, 'proposedBy') ? undefined : json['proposedBy'],
+        'proposedAt': !exists(json, 'proposedAt') ? undefined : (new Date(json['proposedAt'])),
+        'status': !exists(json, 'status') ? undefined : json['status'],
+        'calculatedPayout': !exists(json, 'calculatedPayout') ? undefined : json['calculatedPayout'],
         'notes': !exists(json, 'notes') ? undefined : json['notes'],
-        'signature': !exists(json, 'signature') ? undefined : json['signature'],
+        'supportingBlobIds': !exists(json, 'supportingBlobIds') ? undefined : json['supportingBlobIds'],
     };
 }
 
-export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
+export function ProposeKPIResponseProposalToJSON(value?: ProposeKPIResponseProposal | null): any {
     if (value === undefined) {
         return undefined;
     }
@@ -74,9 +115,15 @@ export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
     }
     return {
         
-        'approved': value.approved,
+        'kpiType': value.kpiType,
+        'value': value.value,
+        'unit': value.unit,
+        'proposedBy': value.proposedBy,
+        'proposedAt': value.proposedAt === undefined ? undefined : (value.proposedAt.toISOString()),
+        'status': value.status,
+        'calculatedPayout': value.calculatedPayout,
         'notes': value.notes,
-        'signature': value.signature,
+        'supportingBlobIds': value.supportingBlobIds,
     };
 }
 

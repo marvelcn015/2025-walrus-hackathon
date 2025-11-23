@@ -60,6 +60,7 @@ GEMINI.md
 
 # OpenAPI generated clients
 /generated
+src/frontend/generated/
 *.generated.*
 
 # Logs
@@ -85,3 +86,5 @@ node_modules/
 
 # Sui Contracts
 /contracts/build/
+src/backend/contracts/build/
+src/backend/contracts/Move.lock

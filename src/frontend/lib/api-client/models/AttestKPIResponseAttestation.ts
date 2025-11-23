@@ -16,56 +16,62 @@ import { exists, mapValues } from '../runtime';
 /**
  * 
  * @export
- * @interface AttestKPIRequest
+ * @interface AttestKPIResponseAttestation
  */
-export interface AttestKPIRequest {
+export interface AttestKPIResponseAttestation {
     /**
-     * Whether the KPI is approved
-     * @type {boolean}
-     * @memberof AttestKPIRequest
-     */
-    approved: boolean;
-    /**
-     * Auditor's notes
+     * 
      * @type {string}
-     * @memberof AttestKPIRequest
+     * @memberof AttestKPIResponseAttestation
      */
-    notes?: string;
+    status?: string;
     /**
-     * Auditor's signature
-     * @type {string}
-     * @memberof AttestKPIRequest
+     * 
+     * @type {number}
+     * @memberof AttestKPIResponseAttestation
      */
-    signature?: string;
+    value?: number;
+    /**
+     * 
+     * @type {string}
+     * @memberof AttestKPIResponseAttestation
+     */
+    attestedBy?: string;
+    /**
+     * 
+     * @type {Date}
+     * @memberof AttestKPIResponseAttestation
+     */
+    attestedAt?: Date;
 }
 
 /**
- * Check if a given object implements the AttestKPIRequest interface.
+ * Check if a given object implements the AttestKPIResponseAttestation interface.
  */
-export function instanceOfAttestKPIRequest(value: object): boolean {
+export function instanceOfAttestKPIResponseAttestation(value: object): boolean {
     let isInstance = true;
-    isInstance = isInstance && "approved" in value;
 
     return isInstance;
 }
 
-export function AttestKPIRequestFromJSON(json: any): AttestKPIRequest {
-    return AttestKPIRequestFromJSONTyped(json, false);
+export function AttestKPIResponseAttestationFromJSON(json: any): AttestKPIResponseAttestation {
+    return AttestKPIResponseAttestationFromJSONTyped(json, false);
 }
 
-export function AttestKPIRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): AttestKPIRequest {
+export function AttestKPIResponseAttestationFromJSONTyped(json: any, ignoreDiscriminator: boolean): AttestKPIResponseAttestation {
     if ((json === undefined) || (json === null)) {
         return json;
     }
     return {
         
-        'approved': json['approved'],
-        'notes': !exists(json, 'notes') ? undefined : json['notes'],
-        'signature': !exists(json, 'signature') ? undefined : json['signature'],
+        'status': !exists(json, 'status') ? undefined : json['status'],
+        'value': !exists(json, 'value') ? undefined : json['value'],
+        'attestedBy': !exists(json, 'attestedBy') ? undefined : json['attestedBy'],
+        'attestedAt': !exists(json, 'attestedAt') ? undefined : (new Date(json['attestedAt'])),
     };
 }
 
-export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
+export function AttestKPIResponseAttestationToJSON(value?: AttestKPIResponseAttestation | null): any {
     if (value === undefined) {
         return undefined;
     }
@@ -74,9 +80,10 @@ export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
     }
     return {
         
-        'approved': value.approved,
-        'notes': value.notes,
-        'signature': value.signature,
+        'status': value.status,
+        'value': value.value,
+        'attestedBy': value.attestedBy,
+        'attestedAt': value.attestedAt === undefined ? undefined : (value.attestedAt.toISOString()),
     };
 }
 

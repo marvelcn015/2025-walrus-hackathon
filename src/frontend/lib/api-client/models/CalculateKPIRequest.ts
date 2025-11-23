@@ -16,56 +16,71 @@ import { exists, mapValues } from '../runtime';
 /**
  * 
  * @export
- * @interface AttestKPIRequest
+ * @interface CalculateKPIRequest
  */
-export interface AttestKPIRequest {
+export interface CalculateKPIRequest {
     /**
-     * Whether the KPI is approved
-     * @type {boolean}
-     * @memberof AttestKPIRequest
-     */
-    approved: boolean;
-    /**
-     * Auditor's notes
+     * Deal ID to calculate KPI for
      * @type {string}
-     * @memberof AttestKPIRequest
+     * @memberof CalculateKPIRequest
      */
-    notes?: string;
+    dealId: string;
     /**
-     * Auditor's signature
-     * @type {string}
-     * @memberof AttestKPIRequest
+     * Zero-based index of the period to calculate
+     * @type {number}
+     * @memberof CalculateKPIRequest
      */
-    signature?: string;
+    periodIndex: number;
+    /**
+     * Type of KPI to calculate (defaults to "revenue" if not specified)
+     * @type {string}
+     * @memberof CalculateKPIRequest
+     */
+    kpiType?: CalculateKPIRequestKpiTypeEnum;
 }
 
+
 /**
- * Check if a given object implements the AttestKPIRequest interface.
+ * @export
  */
-export function instanceOfAttestKPIRequest(value: object): boolean {
+export const CalculateKPIRequestKpiTypeEnum = {
+    Revenue: 'revenue',
+    Ebitda: 'ebitda',
+    UserGrowth: 'user_growth',
+    Arr: 'arr',
+    Custom: 'custom'
+} as const;
+export type CalculateKPIRequestKpiTypeEnum = typeof CalculateKPIRequestKpiTypeEnum[keyof typeof CalculateKPIRequestKpiTypeEnum];
+
+
+/**
+ * Check if a given object implements the CalculateKPIRequest interface.
+ */
+export function instanceOfCalculateKPIRequest(value: object): boolean {
     let isInstance = true;
-    isInstance = isInstance && "approved" in value;
+    isInstance = isInstance && "dealId" in value;
+    isInstance = isInstance && "periodIndex" in value;
 
     return isInstance;
 }
 
-export function AttestKPIRequestFromJSON(json: any): AttestKPIRequest {
-    return AttestKPIRequestFromJSONTyped(json, false);
+export function CalculateKPIRequestFromJSON(json: any): CalculateKPIRequest {
+    return CalculateKPIRequestFromJSONTyped(json, false);
 }
 
-export function AttestKPIRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): AttestKPIRequest {
+export function CalculateKPIRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): CalculateKPIRequest {
     if ((json === undefined) || (json === null)) {
         return json;
     }
     return {
         
-        'approved': json['approved'],
-        'notes': !exists(json, 'notes') ? undefined : json['notes'],
-        'signature': !exists(json, 'signature') ? undefined : json['signature'],
+        'dealId': json['dealId'],
+        'periodIndex': json['periodIndex'],
+        'kpiType': !exists(json, 'kpiType') ? undefined : json['kpiType'],
     };
 }
 
-export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
+export function CalculateKPIRequestToJSON(value?: CalculateKPIRequest | null): any {
     if (value === undefined) {
         return undefined;
     }
@@ -74,9 +89,9 @@ export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
     }
     return {
         
-        'approved': value.approved,
-        'notes': value.notes,
-        'signature': value.signature,
+        'dealId': value.dealId,
+        'periodIndex': value.periodIndex,
+        'kpiType': value.kpiType,
     };
 }
 

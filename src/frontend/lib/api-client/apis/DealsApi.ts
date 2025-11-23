@@ -15,44 +15,15 @@
 
 import * as runtime from '../runtime';
 import type {
-  DealBlobsListResponse,
-  ErrorResponse,
-  ForbiddenError,
-  NotFoundError,
   SetParametersRequest,
   SetParametersResponse,
-  UnauthorizedError,
-  ValidationError,
 } from '../models/index';
 import {
-    DealBlobsListResponseFromJSON,
-    DealBlobsListResponseToJSON,
-    ErrorResponseFromJSON,
-    ErrorResponseToJSON,
-    ForbiddenErrorFromJSON,
-    ForbiddenErrorToJSON,
-    NotFoundErrorFromJSON,
-    NotFoundErrorToJSON,
     SetParametersRequestFromJSON,
     SetParametersRequestToJSON,
     SetParametersResponseFromJSON,
     SetParametersResponseToJSON,
-    UnauthorizedErrorFromJSON,
-    UnauthorizedErrorToJSON,
-    ValidationErrorFromJSON,
-    ValidationErrorToJSON,
 } from '../models/index';
-
-export interface ListDealBlobsRequest {
-    dealId: string;
-    xSuiAddress: string;
-    xSuiSignature: string;
-    xSuiSignatureMessage: Date;
-    periodId?: string;
-    dataType?: ListDealBlobsDataTypeEnum;
-    page?: number;
-    limit?: number;
-}
 
 export interface SetDealParametersRequest {
     dealId: string;
@@ -66,29 +37,6 @@ export interface SetDealParametersRequest {
  * @interface DealsApiInterface
  */
 export interface DealsApiInterface {
-    /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * @summary List all Walrus blobs associated with a deal
-     * @param {string} dealId Deal ID to retrieve blobs for
-     * @param {string} xSuiAddress Sui wallet address requesting the list
-     * @param {string} xSuiSignature Base64-encoded signature of the timestamp message
-     * @param {Date} xSuiSignatureMessage ISO timestamp that was signed (e.g., \&quot;2025-11-20T10:30:45.123Z\&quot;). Must be within 5 minutes of current time to prevent replay attacks. 
-     * @param {string} [periodId] Filter by specific period (optional)
-     * @param {'revenue_journal' | 'ebitda_report' | 'expense_report' | 'balance_sheet' | 'cash_flow' | 'kpi_calculation' | 'audit_report' | 'custom'} [dataType] Filter by data type (optional)
-     * @param {number} [page] Page number for pagination
-     * @param {number} [limit] Number of items per page
-     * @param {*} [options] Override http request option.
-     * @throws {RequiredError}
-     * @memberof DealsApiInterface
-     */
-    listDealBlobsRaw(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DealBlobsListResponse>>;
-
-    /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * List all Walrus blobs associated with a deal
-     */
-    listDealBlobs(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DealBlobsListResponse>;
-
     /**
      * Configures the parameters for an earn-out deal, creates subperiods, and locks the configuration on-chain. This is a prerequisite for uploading Walrus blobs.
      * @summary Set Earn-out Parameters
@@ -112,90 +60,6 @@ export interface DealsApiInterface {
  * 
  */
 export class DealsApi extends runtime.BaseAPI implements DealsApiInterface {
-
-    /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * List all Walrus blobs associated with a deal
-     */
-    async listDealBlobsRaw(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DealBlobsListResponse>> {
-        if (requestParameters.dealId === null || requestParameters.dealId === undefined) {
-            throw new runtime.RequiredError('dealId','Required parameter requestParameters.dealId was null or undefined when calling listDealBlobs.');
-        }
-
-        if (requestParameters.xSuiAddress === null || requestParameters.xSuiAddress === undefined) {
-            throw new runtime.RequiredError('xSuiAddress','Required parameter requestParameters.xSuiAddress was null or undefined when calling listDealBlobs.');
-        }
-
-        if (requestParameters.xSuiSignature === null || requestParameters.xSuiSignature === undefined) {
-            throw new runtime.RequiredError('xSuiSignature','Required parameter requestParameters.xSuiSignature was null or undefined when calling listDealBlobs.');
-        }
-
-        if (requestParameters.xSuiSignatureMessage === null || requestParameters.xSuiSignatureMessage === undefined) {
-            throw new runtime.RequiredError('xSuiSignatureMessage','Required parameter requestParameters.xSuiSignatureMessage was null or undefined when calling listDealBlobs.');
-        }
-
-        const queryParameters: any = {};
-
-        if (requestParameters.periodId !== undefined) {
-            queryParameters['periodId'] = requestParameters.periodId;
-        }
-
-        if (requestParameters.dataType !== undefined) {
-            queryParameters['dataType'] = requestParameters.dataType;
-        }
-
-        if (requestParameters.page !== undefined) {
-            queryParameters['page'] = requestParameters.page;
-        }
-
-        if (requestParameters.limit !== undefined) {
-            queryParameters['limit'] = requestParameters.limit;
-        }
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        if (requestParameters.xSuiAddress !== undefined && requestParameters.xSuiAddress !== null) {
-            headerParameters['X-Sui-Address'] = String(requestParameters.xSuiAddress);
-        }
-
-        if (requestParameters.xSuiSignature !== undefined && requestParameters.xSuiSignature !== null) {
-            headerParameters['X-Sui-Signature'] = String(requestParameters.xSuiSignature);
-        }
-
-        if (requestParameters.xSuiSignatureMessage !== undefined && requestParameters.xSuiSignatureMessage !== null) {
-            headerParameters['X-Sui-Signature-Message'] = String(requestParameters.xSuiSignatureMessage);
-        }
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["X-Sui-Signature-Message"] = this.configuration.apiKey("X-Sui-Signature-Message"); // SuiSignatureMessage authentication
-        }
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["X-Sui-Signature"] = this.configuration.apiKey("X-Sui-Signature"); // SuiSignature authentication
-        }
-
-        if (this.configuration && this.configuration.apiKey) {
-            headerParameters["X-Sui-Address"] = this.configuration.apiKey("X-Sui-Address"); // SuiWalletAuth authentication
-        }
-
-        const response = await this.request({
-            path: `/deals/{dealId}/blobs`.replace(`{${"dealId"}}`, encodeURIComponent(String(requestParameters.dealId))),
-            method: 'GET',
-            headers: headerParameters,
-            query: queryParameters,
-        }, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => DealBlobsListResponseFromJSON(jsonValue));
-    }
-
-    /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * List all Walrus blobs associated with a deal
-     */
-    async listDealBlobs(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DealBlobsListResponse> {
-        const response = await this.listDealBlobsRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
 
     /**
      * Configures the parameters for an earn-out deal, creates subperiods, and locks the configuration on-chain. This is a prerequisite for uploading Walrus blobs.
@@ -249,18 +113,3 @@ export class DealsApi extends runtime.BaseAPI implements DealsApiInterface {
     }
 
 }
-
-/**
- * @export
- */
-export const ListDealBlobsDataTypeEnum = {
-    RevenueJournal: 'revenue_journal',
-    EbitdaReport: 'ebitda_report',
-    ExpenseReport: 'expense_report',
-    BalanceSheet: 'balance_sheet',
-    CashFlow: 'cash_flow',
-    KpiCalculation: 'kpi_calculation',
-    AuditReport: 'audit_report',
-    Custom: 'custom'
-} as const;
-export type ListDealBlobsDataTypeEnum = typeof ListDealBlobsDataTypeEnum[keyof typeof ListDealBlobsDataTypeEnum];

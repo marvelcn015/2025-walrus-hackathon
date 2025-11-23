@@ -13,59 +13,78 @@
  */
 
 import { exists, mapValues } from '../runtime';
-/**
- * 
- * @export
- * @interface AttestKPIRequest
- */
-export interface AttestKPIRequest {
-    /**
-     * Whether the KPI is approved
-     * @type {boolean}
-     * @memberof AttestKPIRequest
-     */
-    approved: boolean;
-    /**
-     * Auditor's notes
-     * @type {string}
-     * @memberof AttestKPIRequest
-     */
-    notes?: string;
-    /**
-     * Auditor's signature
-     * @type {string}
-     * @memberof AttestKPIRequest
-     */
-    signature?: string;
-}
+import type { CalculateKPI200ResponseNextStepTransaction } from './CalculateKPI200ResponseNextStepTransaction';
+import {
+    CalculateKPI200ResponseNextStepTransactionFromJSON,
+    CalculateKPI200ResponseNextStepTransactionFromJSONTyped,
+    CalculateKPI200ResponseNextStepTransactionToJSON,
+} from './CalculateKPI200ResponseNextStepTransaction';
 
 /**
- * Check if a given object implements the AttestKPIRequest interface.
+ * Next action for the user
+ * @export
+ * @interface CalculateKPI200ResponseNextStep
  */
-export function instanceOfAttestKPIRequest(value: object): boolean {
+export interface CalculateKPI200ResponseNextStep {
+    /**
+     * Action identifier
+     * @type {string}
+     * @memberof CalculateKPI200ResponseNextStep
+     */
+    action: CalculateKPI200ResponseNextStepActionEnum;
+    /**
+     * Human-readable description of next step
+     * @type {string}
+     * @memberof CalculateKPI200ResponseNextStep
+     */
+    description: string;
+    /**
+     * 
+     * @type {CalculateKPI200ResponseNextStepTransaction}
+     * @memberof CalculateKPI200ResponseNextStep
+     */
+    transaction: CalculateKPI200ResponseNextStepTransaction;
+}
+
+
+/**
+ * @export
+ */
+export const CalculateKPI200ResponseNextStepActionEnum = {
+    SubmitKpiResult: 'submit_kpi_result'
+} as const;
+export type CalculateKPI200ResponseNextStepActionEnum = typeof CalculateKPI200ResponseNextStepActionEnum[keyof typeof CalculateKPI200ResponseNextStepActionEnum];
+
+
+/**
+ * Check if a given object implements the CalculateKPI200ResponseNextStep interface.
+ */
+export function instanceOfCalculateKPI200ResponseNextStep(value: object): boolean {
     let isInstance = true;
-    isInstance = isInstance && "approved" in value;
+    isInstance = isInstance && "action" in value;
+    isInstance = isInstance && "description" in value;
+    isInstance = isInstance && "transaction" in value;
 
     return isInstance;
 }
 
-export function AttestKPIRequestFromJSON(json: any): AttestKPIRequest {
-    return AttestKPIRequestFromJSONTyped(json, false);
+export function CalculateKPI200ResponseNextStepFromJSON(json: any): CalculateKPI200ResponseNextStep {
+    return CalculateKPI200ResponseNextStepFromJSONTyped(json, false);
 }
 
-export function AttestKPIRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): AttestKPIRequest {
+export function CalculateKPI200ResponseNextStepFromJSONTyped(json: any, ignoreDiscriminator: boolean): CalculateKPI200ResponseNextStep {
     if ((json === undefined) || (json === null)) {
         return json;
     }
     return {
         
-        'approved': json['approved'],
-        'notes': !exists(json, 'notes') ? undefined : json['notes'],
-        'signature': !exists(json, 'signature') ? undefined : json['signature'],
+        'action': json['action'],
+        'description': json['description'],
+        'transaction': CalculateKPI200ResponseNextStepTransactionFromJSON(json['transaction']),
     };
 }
 
-export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
+export function CalculateKPI200ResponseNextStepToJSON(value?: CalculateKPI200ResponseNextStep | null): any {
     if (value === undefined) {
         return undefined;
     }
@@ -74,9 +93,9 @@ export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
     }
     return {
         
-        'approved': value.approved,
-        'notes': value.notes,
-        'signature': value.signature,
+        'action': value.action,
+        'description': value.description,
+        'transaction': CalculateKPI200ResponseNextStepTransactionToJSON(value.transaction),
     };
 }
 

@@ -1,5 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AttestKPIRequest';
+export * from './AttestKPIResponse';
+export * from './AttestKPIResponseAttestation';
+export * from './CalculateKPI200Response';
+export * from './CalculateKPI200ResponseNextStep';
+export * from './CalculateKPI200ResponseNextStepTransaction';
+export * from './CalculateKPIRequest';
 export * from './ConflictError';
 export * from './CreateDealRequest';
 export * from './CreateDealResponse';
@@ -34,6 +41,11 @@ export * from './PeriodSummary';
 export * from './PeriodSummaryDataUploadProgress';
 export * from './PeriodSummaryDateRange';
 export * from './PeriodSummaryNextAction';
+export * from './ProposeKPIRequest';
+export * from './ProposeKPIResponse';
+export * from './ProposeKPIResponseCalculatedPayout';
+export * from './ProposeKPIResponseProposal';
+export * from './ProposeKPIResponseTransaction';
 export * from './SealPolicy';
 export * from './SealRule';
 export * from './SealRuleConditions';

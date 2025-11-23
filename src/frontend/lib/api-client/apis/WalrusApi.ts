@@ -37,15 +37,26 @@ import {
     ValidationErrorToJSON,
 } from '../models/index';
 
-export interface ListDealBlobsRequest {
+export interface DownloadFromWalrusRequest {
+    blobId: string;
     dealId: string;
     xSuiAddress: string;
     xSuiSignature: string;
     xSuiSignatureMessage: Date;
-    periodId?: string;
-    dataType?: ListDealBlobsDataTypeEnum;
-    page?: number;
-    limit?: number;
+}
+
+export interface UploadToWalrusRequest {
+    xSuiAddress: string;
+    xSuiSignature: string;
+    xSuiSignatureMessage: Date;
+    file: Blob;
+    dealId: string;
+    periodId: string;
+    dataType: UploadToWalrusDataTypeEnum;
+    mode?: UploadToWalrusModeEnum;
+    customDataType?: string;
+    filename?: string;
+    description?: string;
 }
 
 /**
@@ -56,16 +67,39 @@ export interface ListDealBlobsRequest {
  */
 export interface WalrusApiInterface {
     /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * @summary List all Walrus blobs associated with a deal
-     * @param {string} dealId Deal ID to retrieve blobs for
-     * @param {string} xSuiAddress Sui wallet address requesting the list
+     * **Purpose**: Download encrypted financial documents from Walrus for frontend decryption  **Download Flow**: 1. Frontend: Requests blobId with user\'s Sui address 2. Backend: Verifies access → Downloads ciphertext from Walrus → Returns ciphertext 3. Frontend: Uses `@mysten/seal` SDK to decrypt locally  **Encryption Transparency**: - The response header `X-Original-Encryption-Mode` indicates how the file was encrypted during upload:   - `client_encrypted`: Frontend encrypted the file before upload   - `server_encrypted`: Backend encrypted the file during upload - Regardless of upload method, **frontend always decrypts** using Seal SDK  **Seal Policy Information**: - Backend provides `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` headers - Frontend uses these to request decryption keys from Seal Key Servers - Access control is enforced by the whitelist Move contract on Sui blockchain  **Access Control**: - Verification: User must be buyer/seller/auditor in the specified deal - On-chain check: Backend queries Sui blockchain to verify user\'s role via whitelist - Only authorized users can decrypt the data  **Security Features**: - Backend never decrypts or sees plaintext during download - All access attempts are logged for audit trail - Invalid access attempts return 403 Forbidden - Decryption keys are fetched on-demand from Seal Key Servers (not stored) 
+     * @summary Download encrypted file from Walrus (Frontend Decryption)
+     * @param {string} blobId Walrus blob ID to download
+     * @param {string} dealId Deal ID for authorization check
+     * @param {string} xSuiAddress Sui wallet address requesting download
      * @param {string} xSuiSignature Base64-encoded signature of the timestamp message
      * @param {Date} xSuiSignatureMessage ISO timestamp that was signed (e.g., \&quot;2025-11-20T10:30:45.123Z\&quot;). Must be within 5 minutes of current time to prevent replay attacks. 
-     * @param {string} [periodId] Filter by specific period (optional)
-     * @param {'revenue_journal' | 'ebitda_report' | 'expense_report' | 'balance_sheet' | 'cash_flow' | 'kpi_calculation' | 'audit_report' | 'custom'} [dataType] Filter by data type (optional)
-     * @param {number} [page] Page number for pagination
-     * @param {number} [limit] Number of items per page
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof WalrusApiInterface
+     */
+    downloadFromWalrusRaw(requestParameters: DownloadFromWalrusRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>>;
+
+    /**
+     * **Purpose**: Download encrypted financial documents from Walrus for frontend decryption  **Download Flow**: 1. Frontend: Requests blobId with user\'s Sui address 2. Backend: Verifies access → Downloads ciphertext from Walrus → Returns ciphertext 3. Frontend: Uses `@mysten/seal` SDK to decrypt locally  **Encryption Transparency**: - The response header `X-Original-Encryption-Mode` indicates how the file was encrypted during upload:   - `client_encrypted`: Frontend encrypted the file before upload   - `server_encrypted`: Backend encrypted the file during upload - Regardless of upload method, **frontend always decrypts** using Seal SDK  **Seal Policy Information**: - Backend provides `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` headers - Frontend uses these to request decryption keys from Seal Key Servers - Access control is enforced by the whitelist Move contract on Sui blockchain  **Access Control**: - Verification: User must be buyer/seller/auditor in the specified deal - On-chain check: Backend queries Sui blockchain to verify user\'s role via whitelist - Only authorized users can decrypt the data  **Security Features**: - Backend never decrypts or sees plaintext during download - All access attempts are logged for audit trail - Invalid access attempts return 403 Forbidden - Decryption keys are fetched on-demand from Seal Key Servers (not stored) 
+     * Download encrypted file from Walrus (Frontend Decryption)
+     */
+    downloadFromWalrus(requestParameters: DownloadFromWalrusRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob>;
+
+    /**
+     * **Purpose**: Upload financial documents to Walrus decentralized storage with flexible encryption  **Why Upload Relay is Needed**: - Direct browser uploads to Walrus require ~2000+ HTTP requests per file - This creates significant browser performance issues and potential failures - Upload relay reduces this to a single API call from frontend - Backend handles the heavy lifting using @mysten/walrus SDK  **Encryption Modes** (controlled by `mode` query parameter):  **Mode A: client_encrypted (Default, Recommended)** - File is encrypted by frontend using @mysten/seal SDK before upload - To perform client-side encryption, the frontend must first fetch the deal\'s access control policy from the `GET /deals/{dealId}/seal-policy` endpoint. - Backend only relays the ciphertext to Walrus (never sees plaintext) - Highest security: Backend cannot access file contents - Fully Web3: User controls their own data encryption  Upload Flow: 1. Frontend: User selects file → Fetches Seal Policy → Encrypts with Seal SDK → Sends ciphertext 2. Backend: Receives ciphertext → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Mode B: server_encrypted (Convenience Mode)** - Frontend sends plaintext file to backend - Backend encrypts using Seal SDK, then uploads to Walrus - Simplified upload: Frontend doesn\'t need Seal SDK for encryption - Trade-off: Backend can access plaintext during upload (trusted environment required) - Download: Frontend still decrypts using Seal SDK (maintains security)  Upload Flow: 1. Frontend: User selects file → Sends plaintext to backend 2. Backend: Encrypts with Seal → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Walrus Integration**: - SDK: Uses @mysten/walrus TypeScript SDK - Network: Uploads to configured Walrus aggregator/publisher - Storage: Stores ONLY encrypted ciphertext (never plaintext) - Metadata: Returns blobId and commitment for on-chain registration  **Seal Integration**: - Policy: `earnout_seal_policy` controls who can decrypt. The policy is retrieved via the `GET /deals/{dealId}/seal-policy` endpoint. - Access: Only buyer/seller/auditor can decrypt based on on-chain roles - Decryption keys: Managed by Seal Key Servers with blockchain verification  **Next Steps After Upload**: - Frontend must call a Sui transaction to register this blobId on-chain - Transaction binds blob to specific deal/period - This creates immutable audit trail of data submissions  **Access Control**: - Role: Authenticated users (primarily buyer uploading data) - Verification: User must be a participant in the specified deal 
+     * @summary Upload file to Walrus (Hybrid Encryption Mode)
+     * @param {string} xSuiAddress Sui wallet address of uploader
+     * @param {string} xSuiSignature Base64-encoded signature of the timestamp message
+     * @param {Date} xSuiSignatureMessage ISO timestamp that was signed (e.g., \&quot;2025-11-20T10:30:45.123Z\&quot;). Must be within 5 minutes of current time to prevent replay attacks. 
+     * @param {Blob} file File data (plaintext or ciphertext depending on mode): - &#x60;client_encrypted&#x60; mode: Encrypted ciphertext from Seal SDK - &#x60;server_encrypted&#x60; mode: Plaintext file (backend will encrypt) 
+     * @param {string} dealId Deal ID this file belongs to
+     * @param {string} periodId Period ID this file belongs to
+     * @param {string} dataType Type of financial data
+     * @param {'client_encrypted' | 'server_encrypted'} [mode] Encryption mode: - &#x60;client_encrypted&#x60;: File already encrypted by frontend (default, most secure) - &#x60;server_encrypted&#x60;: Backend encrypts file (convenience mode, requires trust) 
+     * @param {string} [customDataType] Custom data type name (if dataType is \\\&#39;custom\\\&#39;)
+     * @param {string} [filename] Original filename
+     * @param {string} [description] File description
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof WalrusApiInterface
@@ -73,8 +107,8 @@ export interface WalrusApiInterface {
     listDealBlobsRaw(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DealBlobsListResponse>>;
 
     /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * List all Walrus blobs associated with a deal
+     * **Purpose**: Upload financial documents to Walrus decentralized storage with flexible encryption  **Why Upload Relay is Needed**: - Direct browser uploads to Walrus require ~2000+ HTTP requests per file - This creates significant browser performance issues and potential failures - Upload relay reduces this to a single API call from frontend - Backend handles the heavy lifting using @mysten/walrus SDK  **Encryption Modes** (controlled by `mode` query parameter):  **Mode A: client_encrypted (Default, Recommended)** - File is encrypted by frontend using @mysten/seal SDK before upload - To perform client-side encryption, the frontend must first fetch the deal\'s access control policy from the `GET /deals/{dealId}/seal-policy` endpoint. - Backend only relays the ciphertext to Walrus (never sees plaintext) - Highest security: Backend cannot access file contents - Fully Web3: User controls their own data encryption  Upload Flow: 1. Frontend: User selects file → Fetches Seal Policy → Encrypts with Seal SDK → Sends ciphertext 2. Backend: Receives ciphertext → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Mode B: server_encrypted (Convenience Mode)** - Frontend sends plaintext file to backend - Backend encrypts using Seal SDK, then uploads to Walrus - Simplified upload: Frontend doesn\'t need Seal SDK for encryption - Trade-off: Backend can access plaintext during upload (trusted environment required) - Download: Frontend still decrypts using Seal SDK (maintains security)  Upload Flow: 1. Frontend: User selects file → Sends plaintext to backend 2. Backend: Encrypts with Seal → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Walrus Integration**: - SDK: Uses @mysten/walrus TypeScript SDK - Network: Uploads to configured Walrus aggregator/publisher - Storage: Stores ONLY encrypted ciphertext (never plaintext) - Metadata: Returns blobId and commitment for on-chain registration  **Seal Integration**: - Policy: `earnout_seal_policy` controls who can decrypt. The policy is retrieved via the `GET /deals/{dealId}/seal-policy` endpoint. - Access: Only buyer/seller/auditor can decrypt based on on-chain roles - Decryption keys: Managed by Seal Key Servers with blockchain verification  **Next Steps After Upload**: - Frontend must call a Sui transaction to register this blobId on-chain - Transaction binds blob to specific deal/period - This creates immutable audit trail of data submissions  **Access Control**: - Role: Authenticated users (primarily buyer uploading data) - Verification: User must be a participant in the specified deal 
+     * Upload file to Walrus (Hybrid Encryption Mode)
      */
     listDealBlobs(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DealBlobsListResponse>;
 
@@ -86,8 +120,84 @@ export interface WalrusApiInterface {
 export class WalrusApi extends runtime.BaseAPI implements WalrusApiInterface {
 
     /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * List all Walrus blobs associated with a deal
+     * **Purpose**: Download encrypted financial documents from Walrus for frontend decryption  **Download Flow**: 1. Frontend: Requests blobId with user\'s Sui address 2. Backend: Verifies access → Downloads ciphertext from Walrus → Returns ciphertext 3. Frontend: Uses `@mysten/seal` SDK to decrypt locally  **Encryption Transparency**: - The response header `X-Original-Encryption-Mode` indicates how the file was encrypted during upload:   - `client_encrypted`: Frontend encrypted the file before upload   - `server_encrypted`: Backend encrypted the file during upload - Regardless of upload method, **frontend always decrypts** using Seal SDK  **Seal Policy Information**: - Backend provides `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` headers - Frontend uses these to request decryption keys from Seal Key Servers - Access control is enforced by the whitelist Move contract on Sui blockchain  **Access Control**: - Verification: User must be buyer/seller/auditor in the specified deal - On-chain check: Backend queries Sui blockchain to verify user\'s role via whitelist - Only authorized users can decrypt the data  **Security Features**: - Backend never decrypts or sees plaintext during download - All access attempts are logged for audit trail - Invalid access attempts return 403 Forbidden - Decryption keys are fetched on-demand from Seal Key Servers (not stored) 
+     * Download encrypted file from Walrus (Frontend Decryption)
+     */
+    async downloadFromWalrusRaw(requestParameters: DownloadFromWalrusRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        if (requestParameters.blobId === null || requestParameters.blobId === undefined) {
+            throw new runtime.RequiredError('blobId','Required parameter requestParameters.blobId was null or undefined when calling downloadFromWalrus.');
+        }
+
+        if (requestParameters.dealId === null || requestParameters.dealId === undefined) {
+            throw new runtime.RequiredError('dealId','Required parameter requestParameters.dealId was null or undefined when calling downloadFromWalrus.');
+        }
+
+        if (requestParameters.xSuiAddress === null || requestParameters.xSuiAddress === undefined) {
+            throw new runtime.RequiredError('xSuiAddress','Required parameter requestParameters.xSuiAddress was null or undefined when calling downloadFromWalrus.');
+        }
+
+        if (requestParameters.xSuiSignature === null || requestParameters.xSuiSignature === undefined) {
+            throw new runtime.RequiredError('xSuiSignature','Required parameter requestParameters.xSuiSignature was null or undefined when calling downloadFromWalrus.');
+        }
+
+        if (requestParameters.xSuiSignatureMessage === null || requestParameters.xSuiSignatureMessage === undefined) {
+            throw new runtime.RequiredError('xSuiSignatureMessage','Required parameter requestParameters.xSuiSignatureMessage was null or undefined when calling downloadFromWalrus.');
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters.dealId !== undefined) {
+            queryParameters['dealId'] = requestParameters.dealId;
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (requestParameters.xSuiAddress !== undefined && requestParameters.xSuiAddress !== null) {
+            headerParameters['X-Sui-Address'] = String(requestParameters.xSuiAddress);
+        }
+
+        if (requestParameters.xSuiSignature !== undefined && requestParameters.xSuiSignature !== null) {
+            headerParameters['X-Sui-Signature'] = String(requestParameters.xSuiSignature);
+        }
+
+        if (requestParameters.xSuiSignatureMessage !== undefined && requestParameters.xSuiSignatureMessage !== null) {
+            headerParameters['X-Sui-Signature-Message'] = String(requestParameters.xSuiSignatureMessage);
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-Sui-Signature-Message"] = this.configuration.apiKey("X-Sui-Signature-Message"); // SuiSignatureMessage authentication
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-Sui-Signature"] = this.configuration.apiKey("X-Sui-Signature"); // SuiSignature authentication
+        }
+
+        if (this.configuration && this.configuration.apiKey) {
+            headerParameters["X-Sui-Address"] = this.configuration.apiKey("X-Sui-Address"); // SuiWalletAuth authentication
+        }
+
+        const response = await this.request({
+            path: `/walrus/download/{blobId}`.replace(`{${"blobId"}}`, encodeURIComponent(String(requestParameters.blobId))),
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * **Purpose**: Download encrypted financial documents from Walrus for frontend decryption  **Download Flow**: 1. Frontend: Requests blobId with user\'s Sui address 2. Backend: Verifies access → Downloads ciphertext from Walrus → Returns ciphertext 3. Frontend: Uses `@mysten/seal` SDK to decrypt locally  **Encryption Transparency**: - The response header `X-Original-Encryption-Mode` indicates how the file was encrypted during upload:   - `client_encrypted`: Frontend encrypted the file before upload   - `server_encrypted`: Backend encrypted the file during upload - Regardless of upload method, **frontend always decrypts** using Seal SDK  **Seal Policy Information**: - Backend provides `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` headers - Frontend uses these to request decryption keys from Seal Key Servers - Access control is enforced by the whitelist Move contract on Sui blockchain  **Access Control**: - Verification: User must be buyer/seller/auditor in the specified deal - On-chain check: Backend queries Sui blockchain to verify user\'s role via whitelist - Only authorized users can decrypt the data  **Security Features**: - Backend never decrypts or sees plaintext during download - All access attempts are logged for audit trail - Invalid access attempts return 403 Forbidden - Decryption keys are fetched on-demand from Seal Key Servers (not stored) 
+     * Download encrypted file from Walrus (Frontend Decryption)
+     */
+    async downloadFromWalrus(requestParameters: DownloadFromWalrusRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.downloadFromWalrusRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * **Purpose**: Upload financial documents to Walrus decentralized storage with flexible encryption  **Why Upload Relay is Needed**: - Direct browser uploads to Walrus require ~2000+ HTTP requests per file - This creates significant browser performance issues and potential failures - Upload relay reduces this to a single API call from frontend - Backend handles the heavy lifting using @mysten/walrus SDK  **Encryption Modes** (controlled by `mode` query parameter):  **Mode A: client_encrypted (Default, Recommended)** - File is encrypted by frontend using @mysten/seal SDK before upload - To perform client-side encryption, the frontend must first fetch the deal\'s access control policy from the `GET /deals/{dealId}/seal-policy` endpoint. - Backend only relays the ciphertext to Walrus (never sees plaintext) - Highest security: Backend cannot access file contents - Fully Web3: User controls their own data encryption  Upload Flow: 1. Frontend: User selects file → Fetches Seal Policy → Encrypts with Seal SDK → Sends ciphertext 2. Backend: Receives ciphertext → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Mode B: server_encrypted (Convenience Mode)** - Frontend sends plaintext file to backend - Backend encrypts using Seal SDK, then uploads to Walrus - Simplified upload: Frontend doesn\'t need Seal SDK for encryption - Trade-off: Backend can access plaintext during upload (trusted environment required) - Download: Frontend still decrypts using Seal SDK (maintains security)  Upload Flow: 1. Frontend: User selects file → Sends plaintext to backend 2. Backend: Encrypts with Seal → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Walrus Integration**: - SDK: Uses @mysten/walrus TypeScript SDK - Network: Uploads to configured Walrus aggregator/publisher - Storage: Stores ONLY encrypted ciphertext (never plaintext) - Metadata: Returns blobId and commitment for on-chain registration  **Seal Integration**: - Policy: `earnout_seal_policy` controls who can decrypt. The policy is retrieved via the `GET /deals/{dealId}/seal-policy` endpoint. - Access: Only buyer/seller/auditor can decrypt based on on-chain roles - Decryption keys: Managed by Seal Key Servers with blockchain verification  **Next Steps After Upload**: - Frontend must call a Sui transaction to register this blobId on-chain - Transaction binds blob to specific deal/period - This creates immutable audit trail of data submissions  **Access Control**: - Role: Authenticated users (primarily buyer uploading data) - Verification: User must be a participant in the specified deal 
+     * Upload file to Walrus (Hybrid Encryption Mode)
      */
     async listDealBlobsRaw(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DealBlobsListResponse>> {
         if (requestParameters.dealId === null || requestParameters.dealId === undefined) {
@@ -103,25 +213,29 @@ export class WalrusApi extends runtime.BaseAPI implements WalrusApiInterface {
         }
 
         if (requestParameters.xSuiSignatureMessage === null || requestParameters.xSuiSignatureMessage === undefined) {
-            throw new runtime.RequiredError('xSuiSignatureMessage','Required parameter requestParameters.xSuiSignatureMessage was null or undefined when calling listDealBlobs.');
+            throw new runtime.RequiredError('xSuiSignatureMessage','Required parameter requestParameters.xSuiSignatureMessage was null or undefined when calling uploadToWalrus.');
+        }
+
+        if (requestParameters.file === null || requestParameters.file === undefined) {
+            throw new runtime.RequiredError('file','Required parameter requestParameters.file was null or undefined when calling uploadToWalrus.');
+        }
+
+        if (requestParameters.dealId === null || requestParameters.dealId === undefined) {
+            throw new runtime.RequiredError('dealId','Required parameter requestParameters.dealId was null or undefined when calling uploadToWalrus.');
+        }
+
+        if (requestParameters.periodId === null || requestParameters.periodId === undefined) {
+            throw new runtime.RequiredError('periodId','Required parameter requestParameters.periodId was null or undefined when calling uploadToWalrus.');
+        }
+
+        if (requestParameters.dataType === null || requestParameters.dataType === undefined) {
+            throw new runtime.RequiredError('dataType','Required parameter requestParameters.dataType was null or undefined when calling uploadToWalrus.');
         }
 
         const queryParameters: any = {};
 
-        if (requestParameters.periodId !== undefined) {
-            queryParameters['periodId'] = requestParameters.periodId;
-        }
-
-        if (requestParameters.dataType !== undefined) {
-            queryParameters['dataType'] = requestParameters.dataType;
-        }
-
-        if (requestParameters.page !== undefined) {
-            queryParameters['page'] = requestParameters.page;
-        }
-
-        if (requestParameters.limit !== undefined) {
-            queryParameters['limit'] = requestParameters.limit;
+        if (requestParameters.mode !== undefined) {
+            queryParameters['mode'] = requestParameters.mode;
         }
 
         const headerParameters: runtime.HTTPHeaders = {};
@@ -161,8 +275,8 @@ export class WalrusApi extends runtime.BaseAPI implements WalrusApiInterface {
     }
 
     /**
-     * **Purpose**: Retrieve metadata for all Walrus blobs associated with a specific deal  **Use Case**: - Users need to see all financial documents uploaded for a deal - Auditors need to review all available data before attestation - Sellers want to monitor data submission timeline - Frontend displays a list of downloadable files for each deal  **Data Source**: The system retrieves blob metadata from two sources: 1. **On-chain data**: Blob IDs registered via `add_walrus_blob` Move function 2. **Walrus storage**: Download metadata envelope from each blob to get detailed information  **Response Format**: Returns an array of blob metadata objects, each containing: - Basic info: blobId, size, uploadedAt, uploaderAddress - Classification: dataType (revenue_journal, ebitda_report, etc.), periodId - File info: filename, mimeType, description - Encryption: encryptionMode (client_encrypted or server_encrypted) - Access control: Seal policy information for decryption  **Performance Considerations**: - This endpoint may be slow for deals with many blobs (requires downloading metadata from each) - Future optimization: Cache blob metadata in backend database - Pagination support included for large datasets  **Access Control**: - Authentication required: User must provide valid Sui signature - Authorization: User must be a participant in the deal (buyer/seller/auditor) - Only authorized users can see the list of blobs  **Next Steps After Retrieval**: - Frontend can display the list of files with download buttons - Users can call `GET /walrus/download/{blobId}?dealId={dealId}` to download specific files - Frontend uses `X-Seal-Package-Id` and `X-Seal-Whitelist-Id` from download response to decrypt 
-     * List all Walrus blobs associated with a deal
+     * **Purpose**: Upload financial documents to Walrus decentralized storage with flexible encryption  **Why Upload Relay is Needed**: - Direct browser uploads to Walrus require ~2000+ HTTP requests per file - This creates significant browser performance issues and potential failures - Upload relay reduces this to a single API call from frontend - Backend handles the heavy lifting using @mysten/walrus SDK  **Encryption Modes** (controlled by `mode` query parameter):  **Mode A: client_encrypted (Default, Recommended)** - File is encrypted by frontend using @mysten/seal SDK before upload - To perform client-side encryption, the frontend must first fetch the deal\'s access control policy from the `GET /deals/{dealId}/seal-policy` endpoint. - Backend only relays the ciphertext to Walrus (never sees plaintext) - Highest security: Backend cannot access file contents - Fully Web3: User controls their own data encryption  Upload Flow: 1. Frontend: User selects file → Fetches Seal Policy → Encrypts with Seal SDK → Sends ciphertext 2. Backend: Receives ciphertext → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Mode B: server_encrypted (Convenience Mode)** - Frontend sends plaintext file to backend - Backend encrypts using Seal SDK, then uploads to Walrus - Simplified upload: Frontend doesn\'t need Seal SDK for encryption - Trade-off: Backend can access plaintext during upload (trusted environment required) - Download: Frontend still decrypts using Seal SDK (maintains security)  Upload Flow: 1. Frontend: User selects file → Sends plaintext to backend 2. Backend: Encrypts with Seal → Uploads to Walrus → Returns blobId 3. Frontend: Signs Sui transaction to register blob on-chain  **Walrus Integration**: - SDK: Uses @mysten/walrus TypeScript SDK - Network: Uploads to configured Walrus aggregator/publisher - Storage: Stores ONLY encrypted ciphertext (never plaintext) - Metadata: Returns blobId and commitment for on-chain registration  **Seal Integration**: - Policy: `earnout_seal_policy` controls who can decrypt. The policy is retrieved via the `GET /deals/{dealId}/seal-policy` endpoint. - Access: Only buyer/seller/auditor can decrypt based on on-chain roles - Decryption keys: Managed by Seal Key Servers with blockchain verification  **Next Steps After Upload**: - Frontend must call a Sui transaction to register this blobId on-chain - Transaction binds blob to specific deal/period - This creates immutable audit trail of data submissions  **Access Control**: - Role: Authenticated users (primarily buyer uploading data) - Verification: User must be a participant in the specified deal 
+     * Upload file to Walrus (Hybrid Encryption Mode)
      */
     async listDealBlobs(requestParameters: ListDealBlobsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DealBlobsListResponse> {
         const response = await this.listDealBlobsRaw(requestParameters, initOverrides);
@@ -184,4 +298,12 @@ export const ListDealBlobsDataTypeEnum = {
     AuditReport: 'audit_report',
     Custom: 'custom'
 } as const;
-export type ListDealBlobsDataTypeEnum = typeof ListDealBlobsDataTypeEnum[keyof typeof ListDealBlobsDataTypeEnum];
+export type UploadToWalrusDataTypeEnum = typeof UploadToWalrusDataTypeEnum[keyof typeof UploadToWalrusDataTypeEnum];
+/**
+ * @export
+ */
+export const UploadToWalrusModeEnum = {
+    ClientEncrypted: 'client_encrypted',
+    ServerEncrypted: 'server_encrypted'
+} as const;
+export type UploadToWalrusModeEnum = typeof UploadToWalrusModeEnum[keyof typeof UploadToWalrusModeEnum];

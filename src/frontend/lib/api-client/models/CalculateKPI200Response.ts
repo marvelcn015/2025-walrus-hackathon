@@ -13,59 +13,84 @@
  */
 
 import { exists, mapValues } from '../runtime';
+import type { CalculateKPI200ResponseNextStep } from './CalculateKPI200ResponseNextStep';
+import {
+    CalculateKPI200ResponseNextStepFromJSON,
+    CalculateKPI200ResponseNextStepFromJSONTyped,
+    CalculateKPI200ResponseNextStepToJSON,
+} from './CalculateKPI200ResponseNextStep';
+
 /**
  * 
  * @export
- * @interface AttestKPIRequest
+ * @interface CalculateKPI200Response
  */
-export interface AttestKPIRequest {
+export interface CalculateKPI200Response {
     /**
-     * Whether the KPI is approved
-     * @type {boolean}
-     * @memberof AttestKPIRequest
+     * Calculated KPI value
+     * @type {number}
+     * @memberof CalculateKPI200Response
      */
-    approved: boolean;
+    kpiValue: number;
     /**
-     * Auditor's notes
+     * Type of KPI calculated
      * @type {string}
-     * @memberof AttestKPIRequest
+     * @memberof CalculateKPI200Response
      */
-    notes?: string;
+    kpiType: string;
     /**
-     * Auditor's signature
+     * Base64-encoded cryptographic attestation from Nautilus TEE
      * @type {string}
-     * @memberof AttestKPIRequest
+     * @memberof CalculateKPI200Response
      */
-    signature?: string;
+    attestation: string;
+    /**
+     * Unix timestamp when computation was performed
+     * @type {number}
+     * @memberof CalculateKPI200Response
+     */
+    computedAt: number;
+    /**
+     * 
+     * @type {CalculateKPI200ResponseNextStep}
+     * @memberof CalculateKPI200Response
+     */
+    nextStep: CalculateKPI200ResponseNextStep;
 }
 
 /**
- * Check if a given object implements the AttestKPIRequest interface.
+ * Check if a given object implements the CalculateKPI200Response interface.
  */
-export function instanceOfAttestKPIRequest(value: object): boolean {
+export function instanceOfCalculateKPI200Response(value: object): boolean {
     let isInstance = true;
-    isInstance = isInstance && "approved" in value;
+    isInstance = isInstance && "kpiValue" in value;
+    isInstance = isInstance && "kpiType" in value;
+    isInstance = isInstance && "attestation" in value;
+    isInstance = isInstance && "computedAt" in value;
+    isInstance = isInstance && "nextStep" in value;
 
     return isInstance;
 }
 
-export function AttestKPIRequestFromJSON(json: any): AttestKPIRequest {
-    return AttestKPIRequestFromJSONTyped(json, false);
+export function CalculateKPI200ResponseFromJSON(json: any): CalculateKPI200Response {
+    return CalculateKPI200ResponseFromJSONTyped(json, false);
 }
 
-export function AttestKPIRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): AttestKPIRequest {
+export function CalculateKPI200ResponseFromJSONTyped(json: any, ignoreDiscriminator: boolean): CalculateKPI200Response {
     if ((json === undefined) || (json === null)) {
         return json;
     }
     return {
         
-        'approved': json['approved'],
-        'notes': !exists(json, 'notes') ? undefined : json['notes'],
-        'signature': !exists(json, 'signature') ? undefined : json['signature'],
+        'kpiValue': json['kpiValue'],
+        'kpiType': json['kpiType'],
+        'attestation': json['attestation'],
+        'computedAt': json['computedAt'],
+        'nextStep': CalculateKPI200ResponseNextStepFromJSON(json['nextStep']),
     };
 }
 
-export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
+export function CalculateKPI200ResponseToJSON(value?: CalculateKPI200Response | null): any {
     if (value === undefined) {
         return undefined;
     }
@@ -74,9 +99,11 @@ export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
     }
     return {
         
-        'approved': value.approved,
-        'notes': value.notes,
-        'signature': value.signature,
+        'kpiValue': value.kpiValue,
+        'kpiType': value.kpiType,
+        'attestation': value.attestation,
+        'computedAt': value.computedAt,
+        'nextStep': CalculateKPI200ResponseNextStepToJSON(value.nextStep),
     };
 }
 

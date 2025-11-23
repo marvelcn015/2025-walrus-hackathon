@@ -14,58 +14,59 @@
 
 import { exists, mapValues } from '../runtime';
 /**
- * 
+ * Transaction to submit KPI on-chain
  * @export
- * @interface AttestKPIRequest
+ * @interface CalculateKPI200ResponseNextStepTransaction
  */
-export interface AttestKPIRequest {
+export interface CalculateKPI200ResponseNextStepTransaction {
     /**
-     * Whether the KPI is approved
-     * @type {boolean}
-     * @memberof AttestKPIRequest
-     */
-    approved: boolean;
-    /**
-     * Auditor's notes
+     * Base64-encoded transaction bytes
      * @type {string}
-     * @memberof AttestKPIRequest
+     * @memberof CalculateKPI200ResponseNextStepTransaction
      */
-    notes?: string;
+    txBytes: string;
     /**
-     * Auditor's signature
+     * Transaction digest for reference
      * @type {string}
-     * @memberof AttestKPIRequest
+     * @memberof CalculateKPI200ResponseNextStepTransaction
      */
-    signature?: string;
+    digest?: string;
+    /**
+     * Description of what this transaction does
+     * @type {string}
+     * @memberof CalculateKPI200ResponseNextStepTransaction
+     */
+    description: string;
 }
 
 /**
- * Check if a given object implements the AttestKPIRequest interface.
+ * Check if a given object implements the CalculateKPI200ResponseNextStepTransaction interface.
  */
-export function instanceOfAttestKPIRequest(value: object): boolean {
+export function instanceOfCalculateKPI200ResponseNextStepTransaction(value: object): boolean {
     let isInstance = true;
-    isInstance = isInstance && "approved" in value;
+    isInstance = isInstance && "txBytes" in value;
+    isInstance = isInstance && "description" in value;
 
     return isInstance;
 }
 
-export function AttestKPIRequestFromJSON(json: any): AttestKPIRequest {
-    return AttestKPIRequestFromJSONTyped(json, false);
+export function CalculateKPI200ResponseNextStepTransactionFromJSON(json: any): CalculateKPI200ResponseNextStepTransaction {
+    return CalculateKPI200ResponseNextStepTransactionFromJSONTyped(json, false);
 }
 
-export function AttestKPIRequestFromJSONTyped(json: any, ignoreDiscriminator: boolean): AttestKPIRequest {
+export function CalculateKPI200ResponseNextStepTransactionFromJSONTyped(json: any, ignoreDiscriminator: boolean): CalculateKPI200ResponseNextStepTransaction {
     if ((json === undefined) || (json === null)) {
         return json;
     }
     return {
         
-        'approved': json['approved'],
-        'notes': !exists(json, 'notes') ? undefined : json['notes'],
-        'signature': !exists(json, 'signature') ? undefined : json['signature'],
+        'txBytes': json['txBytes'],
+        'digest': !exists(json, 'digest') ? undefined : json['digest'],
+        'description': json['description'],
     };
 }
 
-export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
+export function CalculateKPI200ResponseNextStepTransactionToJSON(value?: CalculateKPI200ResponseNextStepTransaction | null): any {
     if (value === undefined) {
         return undefined;
     }
@@ -74,9 +75,9 @@ export function AttestKPIRequestToJSON(value?: AttestKPIRequest | null): any {
     }
     return {
         
-        'approved': value.approved,
-        'notes': value.notes,
-        'signature': value.signature,
+        'txBytes': value.txBytes,
+        'digest': value.digest,
+        'description': value.description,
     };
 }
 
