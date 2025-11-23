@@ -8,7 +8,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/src/frontend/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/src/frontend/components/ui/dialog';
-import { Progress } from '@/src/frontend/components/ui/progress';
-import { Alert, AlertDescription } from '@/src/frontend/components/ui/alert';
+} from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTEESettlement } from '@/src/frontend/hooks/useTEESettlement';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
