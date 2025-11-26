@@ -27,20 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light" style={{ colorScheme: 'light' }} suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                document.documentElement.classList.remove('dark');
-                document.documentElement.classList.add('light');
-                document.documentElement.style.colorScheme = 'light';
-              })();
-            `,
-          }}
-        />
-      </head>
+    <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}
       >
